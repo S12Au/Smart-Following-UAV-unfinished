@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include "physicalConstants.h"
 
 /**
  * @brief 约束函数 - 将值限制在指定范围内

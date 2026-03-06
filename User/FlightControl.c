@@ -30,24 +30,28 @@ typedef struct
     uint32_t checksum;
 } FlightPidPersist_t;
 
-static AttitudeEstimator_t g_estimator;
-static AttitudeController_t g_controller;
-static PidObject g_altitudePid;
-static volatile FlightDebugData_t g_debug;
-static FlightState_t g_flightState = FLIGHT_STATE_DISARMED;
+/* ========== 飞控核心模块实例 ========== */
+static AttitudeEstimator_t g_estimator;    // Mahony姿态估计器（融合 IMU 数据解算姿态）
+static AttitudeController_t g_controller;  // 双环 PID 姿态控制器（角度环 + 角速度环）
+static PidObject g_altitudePid;            // 高度 PID 控制器（用于气压定高模式）
+static volatile FlightDebugData_t g_debug; // 调试数据（通过串口/OLED 实时输出）
+static FlightState_t g_flightState = FLIGHT_STATE_DISARMED;  // 当前飞行状态（解锁/锁定等）
 
-static float g_altitudeSp = 0.0f;
-static uint8_t g_altHoldActive = 0;
-static float g_baroRefPressurePa = SEA_LEVEL_PRESSURE;
-static uint8_t g_baroRefReady = 0;
+/* ========== 高度控制参数 ========== */
+static float g_altitudeSp = 0.0f;          // 目标设定点高度（米，定高模式使用）
+static uint8_t g_altHoldActive = 0;        // 定高模式激活标志（1=激活，0=关闭）
+static float g_baroRefPressurePa = SEA_LEVEL_PRESSURE;  // 参考气压值（起飞点气压，用于计算相对高度）
+static uint8_t g_baroRefReady = 0;         // 参考气压就绪标志（1=已校准，0=未校准）
 
-static int32_t g_gyroBiasRaw[3] = {0, 0, 0};
-static int32_t g_accelBiasRaw[3] = {0, 0, 0};
-static uint8_t g_biasReady = 0;
+/* ========== IMU 零偏校准参数 ========== */
+static int32_t g_gyroBiasRaw[3] = {0, 0, 0};  // 陀螺仪零偏校正值（LSB，三轴）
+static int32_t g_accelBiasRaw[3] = {0, 0, 0}; // 加速度计零偏校正值（LSB，三轴）
+static uint8_t g_biasReady = 0;            // 零偏校准就绪标志（1=校准完成，0=校准中）
 
-static int64_t g_gyroSum[3] = {0, 0, 0};
-static int64_t g_accelSum[3] = {0, 0, 0};
-static uint16_t g_calibCount = 0;
+/* ========== IMU 校准过程变量 ========== */
+static int64_t g_gyroSum[3] = {0, 0, 0};   // 陀螺仪累加和（用于滑动平均滤波）
+static int64_t g_accelSum[3] = {0, 0, 0};  // 加速度计累加和（用于滑动平均滤波）
+static uint16_t g_calibCount = 0;          // 校准采样计数器
 
 static uint32_t calcPersistChecksum(const FlightPidPersist_t* data)
 {
@@ -65,11 +69,26 @@ static uint32_t calcPersistChecksum(const FlightPidPersist_t* data)
     return sum;
 }
 
+/** 
+ * @brief 一阶低通滤波器（针对 uint16_t 输入）
+ * @param prev 上一次的输出值
+ * @param input 当前原始输入值
+ * @param alpha 滤波系数（0.0f - 1.0f，值越大响应越快，但噪声也越大）
+ * @return 处理后的输出值
+ */
 static uint16_t lowPassChannelU16(uint16_t prev, uint16_t input, float alpha)
 {
     float y = (1.0f - alpha) * (float)prev + alpha * (float)input;
     y = constrain(y, (float)CONFIG_PPM_MIN_VALID, (float)CONFIG_PPM_MAX_VALID);
     return (uint16_t)(y + 0.5f);
+}
+
+static uint16_t invertPpmChannelU16(uint16_t input)
+{
+    uint16_t constrained = (uint16_t)constrain((float)input,
+                                               (float)CONFIG_PPM_MIN_VALID,
+                                               (float)CONFIG_PPM_MAX_VALID);
+    return (uint16_t)(CONFIG_PPM_MIN_VALID + CONFIG_PPM_MAX_VALID - constrained);
 }
 
 static PidObject* getPidObjectById(FlightPidId_t pidId)
@@ -197,7 +216,7 @@ static bool loadPidParamsFromFlash(void)
     if (data->checksum != calcPersistChecksum(data))
     {
         return false;
-    }
+    } 
 
     for (i = 0; i < (uint32_t)FLIGHT_PID_COUNT; i++)
     {
@@ -232,6 +251,12 @@ static float pressureToAltitudeM(float pressurePa, float refPressurePa)
     return 44330.0f * (1.0f - powf(pressurePa / refPressurePa, 0.19029495f));
 }
 
+/** 
+ * @brief 将原始磁力计数据归一化为单位向量
+ * @param magRaw 输入的原始磁力计数据（LSB，三轴）
+ * @param magNorm 归一化后的向量
+ * @return 1=归一化成功，0=输入无效（零向量）
+ */
 static uint8_t normalizeMag(const int16_t magRaw[3], float magNorm[3])
 {
     float mx = (float)magRaw[0];
@@ -253,6 +278,12 @@ static uint8_t normalizeMag(const int16_t magRaw[3], float magNorm[3])
     return 1;
 }
 
+/**
+ * @brief   获取传感器数据是否有效
+ * @param   ppm 指向PPM数据结构的指针，包含遥控器输入通道数据
+ * @return  1=数据有效，0=数据无效
+ * @note    该函数通过检查前4个PPM通道的值是否在预设的有效范围内来判断数据的有效性。
+ */
 static uint8_t isPpmFrameValid(const struct PPM_Data* ppm)
 {
     uint8_t i;
@@ -286,6 +317,11 @@ static void applyMotorSafe(void)
     g_debug.m4 = motor.m4;
 }
 
+/** 
+ * @brief 判断IMU（惯性测量单元，包含陀螺仪和加速度计）是否处于静止状态
+ * @param imu 指向GYRO_ACCEL_Data结构体的指针，包含陀螺仪和加速度计的原始数据
+ * @return 1=IMU处于静止状态，0=IMU不处于静止状态
+ */
 static uint8_t isImuStill(const struct GYRO_ACCEL_Data* imu)
 {
     float gx;
@@ -320,6 +356,11 @@ static uint8_t isImuStill(const struct GYRO_ACCEL_Data* imu)
     return 1;
 }
 
+/**
+ * @brief 重置IMU零偏校准累积器
+ * 该函数会将陀螺仪和加速度计的累积和清零，并重置校准样本计数器。
+ * 在IMU不处于静止状态时调用，以确保后续的零偏计算基于新的静止数据。
+ */
 static void resetCalibrationAccumulator(void)
 {
     g_gyroSum[0] = 0;
@@ -331,6 +372,10 @@ static void resetCalibrationAccumulator(void)
     g_calibCount = 0;
 }
 
+/** 
+ * @brief 执行一次IMU零偏置校准步骤
+ * @param imu 指向GYRO_ACCEL_Data结构体的指针，包含陀螺仪和加速度计的原始数据
+ */
 static void runBiasCalibrationStep(const struct GYRO_ACCEL_Data* imu)
 {
     if (g_biasReady)
@@ -455,6 +500,10 @@ bool FlightControl_GetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, fl
     }
 }
 
+/** 
+ * @brief 飞行控制主任务
+ * @param params 任务参数，当前未使用
+ */
 void FlightControl_Task(void* params)
 {
     (void)params;
@@ -463,33 +512,47 @@ void FlightControl_Task(void* params)
     const TickType_t xPeriod = pdMS_TO_TICKS(2); /* 500Hz */
     float yawTargetDeg = 0.0f;
 
-    struct GYRO_ACCEL_Data imuRaw;
-    struct MAG_Data magRaw;
-    struct Pressure_Data pressureRaw;
-    struct PPM_Data ppmRaw;
-    TickType_t lastPpmTick;
-    TickType_t armCmdStartTick = 0;
-    TickType_t disarmCmdStartTick = 0;
-    TickType_t nowTick;
+    /* ========== 原始传感器数据接收 ========== */
+    struct GYRO_ACCEL_Data imuRaw;      /* 原始 IMU 数据（陀螺仪 + 加速度计），单位：LSB */
+    struct MAG_Data magRaw;             /* 原始磁力计数据，单位：LSB */
+    struct Pressure_Data pressureRaw;   /* 原始气压计数据，单位：Pa */
+    struct PPM_Data ppmRaw;             /* 原始遥控器 PPM 信号数据 */
+    
+    /* ========== 传感器数据时间戳管理（用于超时检测）========== */
+    TickType_t lastPpmTick;             /* PPM 信号最后接收时间戳 */
+    TickType_t lastImuTick;             /* IMU 数据最后接收时间戳 */
+    TickType_t lastMagTick;             /* 磁力计数据最后接收时间戳 */
+    TickType_t lastPressureTick;        /* 气压计数据最后接收时间戳 */
+    TickType_t armCmdStartTick = 0;     /* 解锁命令起始时间戳 */
+    TickType_t disarmCmdStartTick = 0;  /* 上锁命令起始时间戳 */
+    TickType_t nowTick;                 /* 当前系统时间戳 */
 
-    SensorData_t sensor;
-    AttitudeSetpoint_t sp;
-    AttitudeState_t state;
-    MotorOutput_t motor;
-    ControlInput_t input;
-    ControlInput_t inputRaw;
-    int16_t gyroCorrected[3];
-    int16_t accelCorrected[3];
-    int16_t latestMagRaw[3] = {0, 0, 0};
-    uint8_t magValid = 0;
-    float filteredPressurePa = SEA_LEVEL_PRESSURE;
-    float altitudeM = 0.0f;
-    uint8_t pressureValid = 0;
-    uint16_t throttleCmd = CONFIG_MOTOR_MIN_THROTTLE;
+    /* ========== 控制流程核心数据结构 ========== */
+    SensorData_t sensor;                /* 标准化传感器数据输入（供姿态估计器使用） */
+    AttitudeSetpoint_t sp;              /* 姿态设定点（目标角度/角速度） */
+    AttitudeState_t state;              /* 当前姿态状态（角度°、角速度°/s） */
+    MotorOutput_t motor;                /* 电机 PWM 输出值 */
+    ControlInput_t input;               /* 滤波后控制输入 */
+    ControlInput_t inputRaw;            /* 原始控制输入（未滤波） */
+    
+    /* ========== 传感器数据处理与校正 ========== */
+    int16_t gyroCorrected[3];           /* 零偏校正后的陀螺仪数据 [x,y,z]，单位：LSB */
+    int16_t accelCorrected[3];          /* 零偏校正后的加速度计数据 [x,y,z]，单位：LSB */
+    int16_t latestMagRaw[3] = {0, 0, 0};/* 最新磁力计原始值 [x,y,z]，单位：LSB */
+    uint8_t magValid = 0;               /* 磁力计数据有效性标志（1=有效，0=无效/超时） */
+    float filteredPressurePa = SEA_LEVEL_PRESSURE;  /* 滤波后气压值，单位：Pa */
+    float altitudeM = 0.0f;             /* 相对起飞点的高度，单位：米（m） */
+    uint8_t pressureValid = 0;          /* 气压计数据有效性标志（1=有效，0=无效/超时） */
+    
+    /* ========== 最终控制输出 ========== */
+    uint16_t throttleCmd = CONFIG_MOTOR_MIN_THROTTLE;  /* 最终油门指令，范围：MIN_THROTTLE~MAX_THROTTLE */
 
     FlightControl_Init();
     lastPpmTick = xTaskGetTickCount();
-
+    lastImuTick = lastPpmTick;
+    lastMagTick = lastPpmTick;
+    lastPressureTick = lastPpmTick;
+    
     state.roll = 0.0f;
     state.pitch = 0.0f;
     state.yaw = 0.0f;
@@ -516,6 +579,7 @@ void FlightControl_Task(void* params)
             latestMagRaw[1] = magRaw.mag[1];
             latestMagRaw[2] = magRaw.mag[2];
             magValid = 1;
+            lastMagTick = nowTick;
         }
 
         if (xQueueReceive(QueuePressure, &pressureRaw, 0) == pdTRUE)
@@ -525,6 +589,7 @@ void FlightControl_Task(void* params)
             if (pressurePa > 1000.0f)
             {
                 pressureValid = 1;
+                lastPressureTick = nowTick;
                 filteredPressurePa = filteredPressurePa * 0.9f + pressurePa * 0.1f;
 
                 if (!g_baroRefReady || g_flightState != FLIGHT_STATE_ARMED)
@@ -539,6 +604,7 @@ void FlightControl_Task(void* params)
 
         if (xQueueReceive(QueueGYROACCEL, &imuRaw, 0) == pdTRUE)
         {
+            lastImuTick = nowTick;
             if (g_flightState != FLIGHT_STATE_ARMED)
             {
                 runBiasCalibrationStep(&imuRaw);
@@ -576,13 +642,25 @@ void FlightControl_Task(void* params)
             state.yawRate = (float)gyroCorrected[2] / 16.4f;
         }
 
+        if (magValid && ((nowTick - lastMagTick) > pdMS_TO_TICKS(CONFIG_MAG_STALE_TIMEOUT_MS)))
+        {
+            magValid = 0;
+        }
+
+        if (pressureValid && ((nowTick - lastPressureTick) > pdMS_TO_TICKS(CONFIG_PRESSURE_STALE_TIMEOUT_MS)))
+        {
+            pressureValid = 0;
+            g_altHoldActive = 0;
+            pidReset(&g_altitudePid, altitudeM);
+        }
+
         if (xQueueReceive(QueuePPM, &ppmRaw, 0) == pdTRUE)
         {
             if (isPpmFrameValid(&ppmRaw))
             {
                 inputRaw.lateral = ppmRaw.ppmCh[0];
-                inputRaw.forward = ppmRaw.ppmCh[1];
-                inputRaw.lift = ppmRaw.ppmCh[2];
+                inputRaw.forward = invertPpmChannelU16(ppmRaw.ppmCh[1]);
+                inputRaw.lift = invertPpmChannelU16(ppmRaw.ppmCh[2]);
                 inputRaw.yaw = ppmRaw.ppmCh[3];
                 lastPpmTick = nowTick;
             }
@@ -593,7 +671,9 @@ void FlightControl_Task(void* params)
         input.lift = lowPassChannelU16(input.lift, inputRaw.lift, RC_FILTER_ALPHA);
         input.yaw = lowPassChannelU16(input.yaw, inputRaw.yaw, RC_FILTER_ALPHA);
 
-        if ((nowTick - lastPpmTick) > pdMS_TO_TICKS(CONFIG_PPM_FAILSAFE_TIMEOUT_MS))
+        if (((nowTick - lastPpmTick) > pdMS_TO_TICKS(CONFIG_PPM_FAILSAFE_TIMEOUT_MS)) ||
+            ((g_flightState == FLIGHT_STATE_ARMED) &&
+             ((nowTick - lastImuTick) > pdMS_TO_TICKS(CONFIG_IMU_FAILSAFE_TIMEOUT_MS))))
         {
             g_flightState = FLIGHT_STATE_FAILSAFE;
         }

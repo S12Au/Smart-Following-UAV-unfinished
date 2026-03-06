@@ -6,9 +6,9 @@
 
 typedef enum
 {
-	FLIGHT_STATE_DISARMED = 0,
-	FLIGHT_STATE_ARMED,
-	FLIGHT_STATE_FAILSAFE
+    FLIGHT_STATE_DISARMED = 0, // 未解锁，电机安全关闭，禁止飞行
+    FLIGHT_STATE_ARMED,         // 已解锁，允许飞行，电机可输出
+    FLIGHT_STATE_FAILSAFE       // 失控保护，进入安全模式（如信号丢失或传感器异常）
 } FlightState_t;
 
 typedef struct

@@ -35,6 +35,7 @@
 #include "uart_task.h"
 #include "getPPM_task.h"
 #include "FlightControl.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -73,6 +74,8 @@ void Show_Task(void *params);
 void Uart_Debug_Task(void *params);
 void Get_PPM_Task(void *params);
 void Flight_Control_Task(void *params);
+void K230_Control_Task(void *params);
+void USART6_Echo_Test_Task(void *params);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -90,7 +93,7 @@ void MX_FREERTOS_Init(void) {
 	QueueMAG = xQueueCreate(10, sizeof(struct MAG_Data));
 	QueuePressure = xQueueCreate(10, sizeof(struct Pressure_Data));
 	QueuePPM = xQueueCreate(10, sizeof(struct PPM_Data));
-  /* USER CODE END Init */ 
+  /* USER CODE END Init */
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -102,12 +105,15 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
+	/*
 	xTaskCreate(Get_GYROandACCEL_Task,"Get_GYROandACCEL_Task",128,NULL,osPriorityNormal,NULL);
 	xTaskCreate(Get_MAG_Task,"Get_MAG_Task",128,NULL,osPriorityNormal,NULL);
 	xTaskCreate(Get_Pressure_Task,"Get_Pressure_Task",128,NULL,osPriorityNormal,NULL);
 	xTaskCreate(Uart_Debug_Task,"Uart_Debug_Task",128,NULL,osPriorityNormal,NULL);
-  xTaskCreate(Get_PPM_Task,"Get_PPM_Task",128,NULL,osPriorityNormal,NULL);
-  xTaskCreate(Flight_Control_Task,"Flight_Control_Task",256,NULL,osPriorityAboveNormal,NULL);
+	xTaskCreate(Get_PPM_Task,"Get_PPM_Task",128,NULL,osPriorityNormal,NULL);
+	xTaskCreate(Flight_Control_Task,"Flight_Control_Task",256,NULL,osPriorityAboveNormal,NULL);
+	*/
+	xTaskCreate(USART6_Echo_Test_Task,"USART6_Echo_Test_Task",128,NULL,osPriorityNormal,NULL);
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -173,13 +179,40 @@ void Uart_Debug_Task(void *params)
 	Uart_Send_Task();
 }
 
-void Get_PPM_Task(void *params){
+void Get_PPM_Task(void *params)
+{
 	getPPM_Task();
 }
 
 void Flight_Control_Task(void *params)
 {
   FlightControl_Task(params);
+}
+
+void K230_Control_Task(void *params)
+{
+	
+}
+
+void USART6_Echo_Test_Task(void *params)
+{
+  uint8_t rxBuffer[128];
+  uint16_t rxLength = 0;
+  const char *readyMsg = "USART6 echo test ready\r\n";
+
+  HAL_UART_Transmit(&huart6, (uint8_t *)readyMsg, strlen(readyMsg), 1000);
+
+  for (;;)
+  {
+    if (HAL_UARTEx_ReceiveToIdle(&huart6, rxBuffer, sizeof(rxBuffer), &rxLength, 100) == HAL_OK)
+    {
+      if (rxLength > 0)
+      {
+        HAL_UART_Transmit(&huart6, rxBuffer, rxLength, 1000);
+      }
+    }
+    osDelay(1);
+  }
 }
 /* USER CODE END Application */
 

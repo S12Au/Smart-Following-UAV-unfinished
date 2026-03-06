@@ -51,3 +51,8 @@ flighter\uart_task.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
 flighter\uart_task.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h
 flighter\uart_task.o: ../Core/Inc/i2c.h
 flighter\uart_task.o: ..\User\User Task\getPPM_task.h
+flighter\uart_task.o: ../User/FlightControl.h
+flighter\uart_task.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
+flighter\uart_task.o: ..\User\PID\autoconf.h
+flighter\uart_task.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+flighter\uart_task.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h

@@ -14,11 +14,11 @@
  * yaw: 偏航指令 [1000, 2000]（摇杆偏转为转向，回中后保持偏航角）
  */
 typedef struct {
-    uint16_t lift;
-    uint16_t forward;
-    uint16_t lateral;
-    uint16_t yaw;
-    bool armed;
+    uint16_t lift;      /* 上升/下降（总推力） [1000, 2000]*/
+    uint16_t forward;   /* 前进/后退指令 [1000, 2000] */
+    uint16_t lateral;   /* 左右横移指令 [1000, 2000] */
+    uint16_t yaw;       /* 偏航指令 [1000, 2000] */
+    bool armed;         /* 解锁状态 */
 } ControlInput_t;
 
 /**
@@ -35,9 +35,9 @@ typedef struct {
  * 姿态目标结构体
  */
 typedef struct {
-    float roll;         /* deg */
-    float pitch;        /* deg */
-    float yawRate;      /* deg/s */
+    float roll;         /* 横滚角 deg */
+    float pitch;        /* 俯仰角 deg */
+    float yawRate;      /* 偏航角速度 deg/s */
 } AttitudeSetpoint_t;
 
 /**
@@ -56,21 +56,21 @@ typedef struct {
  * 姿态控制器结构体（串级PID）
  */
 typedef struct {
-    PidObject rollAnglePid;
-    PidObject pitchAnglePid;
-    PidObject rollRatePid;
-    PidObject pitchRatePid;
-    PidObject yawRatePid;
+    PidObject rollAnglePid;   // 横滚角外环PID（控制roll角度）
+    PidObject pitchAnglePid;  // 俯仰角外环PID（控制pitch角度）
+    PidObject rollRatePid;    // 横滚角速度内环PID（控制roll旋转速度）
+    PidObject pitchRatePid;   // 俯仰角速度内环PID（控制pitch旋转速度）
+    PidObject yawRatePid;     // 偏航角速度PID（控制yaw旋转速度）
 
-    float dt;
+    float dt;                 // 控制周期（单位：秒）
 
-    float rollRateSp;
-    float pitchRateSp;
-    float yawRateSp;
+    float rollRateSp;         // 横滚角速度设定点（由外环输出，作为内环目标）
+    float pitchRateSp;        // 俯仰角速度设定点（由外环输出，作为内环目标）
+    float yawRateSp;          // 偏航角速度设定点（目标值）
 
-    float rollOut;
-    float pitchOut;
-    float yawOut;
+    float rollOut;            // 横滚通道最终PID输出（用于电机混控）
+    float pitchOut;           // 俯仰通道最终PID输出（用于电机混控）
+    float yawOut;             // 偏航通道最终PID输出（用于电机混控）
 } AttitudeController_t;
 
 typedef enum {
