@@ -87,12 +87,14 @@ void lpf2pSetCutoffFreq(lpf2pData* lpfData, float sample_freq, float cutoff_freq
 
 float lpf2pApply(lpf2pData* lpfData, float sample)
 {
+  /* delay_element_0: 延迟单元 0，存储当前时刻的中间状态值 */
   float delay_element_0 = sample - lpfData->delay_element_1 * lpfData->a1 - lpfData->delay_element_2 * lpfData->a2;
   if (!isfinite(delay_element_0)) {
     // don't allow bad values to propigate via the filter
     delay_element_0 = sample;
   }
 
+  /* output: 滤波后的输出值 */
   float output = delay_element_0 * lpfData->b0 + lpfData->delay_element_1 * lpfData->b1 + lpfData->delay_element_2 * lpfData->b2;
 
   lpfData->delay_element_2 = lpfData->delay_element_1;

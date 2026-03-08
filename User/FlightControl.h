@@ -11,6 +11,9 @@ typedef enum
     FLIGHT_STATE_FAILSAFE       // 失控保护，进入安全模式（如信号丢失或传感器异常）
 } FlightState_t;
 
+/**
+ * @brief 飞行调试数据结构体
+ */
 typedef struct
 {
 	FlightState_t state;
@@ -21,19 +24,19 @@ typedef struct
 	float pitch;
 	float yaw;
 
-	float rollSp;
-	float pitchSp;
-	float yawRateSp;
+	float rollSp;			/* 横滚角设定点（目标值） */
+	float pitchSp;			/* 俯仰角设定点（目标值） */
+	float yawRateSp;		/* 角速度设定点（目标值） */
+	
+	float rollOut;			/* 横滚通道最终PID输出（用于电机混控） */
+	float pitchOut;			/* 俯仰通道最终PID输出（用于电机混控） */
+	float yawOut;			/* 偏航通道最终PID输出（用于电机混控） */
 
-	float rollOut;
-	float pitchOut;
-	float yawOut;
-
-	uint16_t throttle;
-	uint16_t m1;
-	uint16_t m2;
-	uint16_t m3;
-	uint16_t m4;
+	uint16_t throttle;		/* 基础油门指令 */
+	uint16_t m1;			/* 电机1输出 */
+	uint16_t m2;			/* 电机2输出 */
+	uint16_t m3;			/* 电机3输出 */
+	uint16_t m4;			/* 电机4输出 */
 } FlightDebugData_t;
 
 typedef enum

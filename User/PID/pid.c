@@ -57,11 +57,11 @@ void pidInit(PidObject* pid, const float desired, const float kp,
 
 float pidUpdate(PidObject* pid, const float measured, const bool isYawAngle)
 {
-  float output = 0.0f;
-  float integCandidate;
-  float outICandidate;
-  float outputUnsat;
-  bool freezeIntegral = false;
+  float output = 0.0f;              // PID 控制器输出
+  float integCandidate;             // 积分项候选值（用于防饱和检查）
+  float outICandidate;              // 积分项输出候选值（用于限幅前计算）
+  float outputUnsat;                // 未饱和的输出值（用于抗饱和反馈）
+  bool freezeIntegral = false;      // 积分冻结标志（大误差时禁止积分累加）
 
   pid->error = pid->desired - measured;
   
@@ -83,7 +83,8 @@ float pidUpdate(PidObject* pid, const float measured, const bool isYawAngle)
   * in the setpoint. By using the process variable for the derivative calculation, we achieve
   * smoother and more stable control during setpoint changes.
   */
-  float delta = -(measured - pid->prevMeasured);
+
+  float delta = -(measured - pid->prevMeasured);      /*delta: 测量值和上一次测量值之间的差*/
 
   // For yaw measurements, take care of spikes when crossing 180deg <-> -180deg  
   if (isYawAngle){
@@ -103,6 +104,7 @@ float pidUpdate(PidObject* pid, const float measured, const bool isYawAngle)
       pid->deriv = delta / pid->dt;
     }
   #endif
+  
   if (isnan(pid->deriv)) {
     pid->deriv = 0;
   }

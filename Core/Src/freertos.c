@@ -105,15 +105,17 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
-	/*
+	
 	xTaskCreate(Get_GYROandACCEL_Task,"Get_GYROandACCEL_Task",128,NULL,osPriorityNormal,NULL);
 	xTaskCreate(Get_MAG_Task,"Get_MAG_Task",128,NULL,osPriorityNormal,NULL);
 	xTaskCreate(Get_Pressure_Task,"Get_Pressure_Task",128,NULL,osPriorityNormal,NULL);
+	/*
 	xTaskCreate(Uart_Debug_Task,"Uart_Debug_Task",128,NULL,osPriorityNormal,NULL);
 	xTaskCreate(Get_PPM_Task,"Get_PPM_Task",128,NULL,osPriorityNormal,NULL);
-	xTaskCreate(Flight_Control_Task,"Flight_Control_Task",256,NULL,osPriorityAboveNormal,NULL);
 	*/
-	xTaskCreate(USART6_Echo_Test_Task,"USART6_Echo_Test_Task",128,NULL,osPriorityNormal,NULL);
+	xTaskCreate(Flight_Control_Task,"Flight_Control_Task",256,NULL,osPriorityAboveNormal,NULL);
+	
+	//xTaskCreate(USART6_Echo_Test_Task,"USART6_Echo_Test_Task",128,NULL,osPriorityNormal,NULL);
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */

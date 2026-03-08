@@ -83,6 +83,11 @@ static uint16_t lowPassChannelU16(uint16_t prev, uint16_t input, float alpha)
     return (uint16_t)(y + 0.5f);
 }
 
+/** 
+ * @brief 反转 PPM 通道值（将输入范围 [MIN, MAX] 映射到 [MAX, MIN]）
+ * @param input 原始输入值
+ * @return 反转后的输出值
+ */
 static uint16_t invertPpmChannelU16(uint16_t input)
 {
     uint16_t constrained = (uint16_t)constrain((float)input,
@@ -302,6 +307,10 @@ static uint8_t isPpmFrameValid(const struct PPM_Data* ppm)
     return 1;
 }
 
+/**
+ * @brief 将所有电机输出设置为安全的最低油门值
+ * @note 该函数在飞行器解锁失败或发生严重错误时调用，以确保电机不会意外启动。
+ */
 static void applyMotorSafe(void)
 {
     MotorOutput_t motor;
@@ -510,7 +519,7 @@ void FlightControl_Task(void* params)
 
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xPeriod = pdMS_TO_TICKS(2); /* 500Hz */
-    float yawTargetDeg = 0.0f;
+    float yawTargetDeg = 0.0f;          /* 当前目标偏航角，单位：度 */
 
     /* ========== 原始传感器数据接收 ========== */
     struct GYRO_ACCEL_Data imuRaw;      /* 原始 IMU 数据（陀螺仪 + 加速度计），单位：LSB */
@@ -746,10 +755,10 @@ void FlightControl_Task(void* params)
         }
         else
         {
-            float yawStick;
-            float yawErr;
-            float liftStick;
-            float altitudeOut = 0.0f;
+            float yawStick;                 /*偏航输入的归一化后的值*/
+            float yawErr;                   /*偏航误差*/
+            float liftStick;                /*升力输入的归一化后的值*/
+            float altitudeOut = 0.0f;       /*高度输出*/
 
             AttitudeController_GenerateSetpoint(&input, &sp);
 

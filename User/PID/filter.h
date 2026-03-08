@@ -32,19 +32,32 @@
 
 int16_t iirLPFilterSingle(int32_t in, int32_t attenuation,  int32_t* filt);
 
+/**
+ * @brief 二阶低通滤波器结构体
+ *
+ */
 typedef struct {
-  float a1;
-  float a2;
-  float b0;
-  float b1;
-  float b2;
-  float delay_element_1;
-  float delay_element_2;
+  float a1;              // 滤波器系数 a1（反馈系数）
+  float a2;              // 滤波器系数 a2（反馈系数）
+  float b0;              // 滤波器系数 b0（前馈系数）
+  float b1;              // 滤波器系数 b1（前馈系数）
+  float b2;              // 滤波器系数 b2（前馈系数）
+  float delay_element_1; // 延迟单元 1，存储上一时刻的中间状态值
+  float delay_element_2; // 延迟单元 2，存储上上时刻的中间状态值
 } lpf2pData;
 
 void lpf2pInit(lpf2pData* lpfData, float sample_freq, float cutoff_freq);
+
 void lpf2pSetCutoffFreq(lpf2pData* lpfData, float sample_freq, float cutoff_freq);
+
+/**
+ * @brief 应用二阶低通滤波器处理输入样本
+ * @param lpfData 二阶低通滤波器数据结构指针
+ * @param sample 输入样本值
+ * @return 滤波后的输出值
+ */
 float lpf2pApply(lpf2pData* lpfData, float sample);
+
 float lpf2pReset(lpf2pData* lpfData, float sample);
 
 /** Second order low pass filter structure.

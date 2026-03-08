@@ -33,27 +33,30 @@
 #define DEFAULT_PID_INTEGRATION_LIMIT 5000.0
 #define DEFAULT_PID_OUTPUT_LIMIT      0.0
 
-
+/** 
+ * @brief PID对象结构体
+ * 包含PID算法所需的所有参数和状态变量
+ */
 typedef struct
 {
-  float desired;      //< set point
-  float error;        //< error
-  float prevMeasured; //< previous measurement
-  float integ;        //< integral
-  float deriv;        //< derivative
-  float kp;           //< proportional gain
-  float ki;           //< integral gain
-  float kd;           //< derivative gain
-  float kff;          //< feedforward gain
-  float outP;         //< proportional output (debugging)
-  float outI;         //< integral output (debugging)
-  float outD;         //< derivative output (debugging)
-  float outFF;        //< feedforward output (debugging)
-  float iLimit;       //< integral limit, absolute value. '0' means no limit.
-  float outputLimit;  //< total PID output limit, absolute value. '0' means no limit.
-  float dt;           //< delta-time dt
-  lpf2pData dFilter;  //< filter for D term
-  bool enableDFilter; //< filter for D term enable flag
+  float desired;      // 期望值（设定值）
+  float error;        // 误差（期望值 - 测量值）
+  float prevMeasured; // 上次测量值
+  float integ;        // 积分项累加值
+  float deriv;        // 微分项值
+  float kp;           // 比例增益系数
+  float ki;           // 积分增益系数
+  float kd;           // 微分增益系数
+  float kff;          // 前馈增益系数
+  float outP;         // 比例项输出（调试用）
+  float outI;         // 积分项输出（调试用）
+  float outD;         // 微分项输出（调试用）
+  float outFF;        // 前馈项输出（调试用）
+  float iLimit;       // 积分限幅值（绝对值），0 表示无限幅
+  float outputLimit;  // PID 总输出限幅值（绝对值），0 表示无限幅
+  float dt;           // 采样时间间隔（秒）
+  lpf2pData dFilter;  // 微分项二阶低通滤波器
+  bool enableDFilter; // 微分项滤波器使能标志
 } PidObject;
 
 /**

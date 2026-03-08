@@ -152,7 +152,10 @@ uint8_t IIC_Read(uint8_t addr,uint8_t RegAddr){
     if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
         HAL_I2C_Mem_Read_DMA(&hi2c1, addr<<1, RegAddr, I2C_MEMADD_SIZE_8BIT, &data, 1);
     }
-    return data;
+    
+	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
+		return data;    
+	}
 }
 
 uint32_t MS5611_Read(uint8_t cmd){
@@ -271,7 +274,7 @@ void MPU6050_Init(){
 			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
 	}
 	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x04;
+		buf = 0x01;
 		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_SMPLRT_DIV, 
 			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
 	}
