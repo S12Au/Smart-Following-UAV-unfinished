@@ -7,7 +7,18 @@
 #include "i2c.h"
 
 
-#define MPU6050_DEVICE_ADRESS 	0x68		//MPU6050设备地址
+/* ==================== I2C 通信超时与重试配置 ==================== */
+/* 超时时间配置（基于设备特性和 FreeRTOS tick） */
+#define I2C_TIMEOUT_FAST_DEVICE     pdMS_TO_TICKS(5)    // MPU6050/HMC5883L：正常<1ms，5ms 安全裕量
+#define I2C_TIMEOUT_PRESSURE        pdMS_TO_TICKS(30)   // BMP180/MS5611：包含 ADC 转换时间（最大 25.5ms）
+#define I2C_TIMEOUT_INIT            pdMS_TO_TICKS(50)   // 初始化阶段可稍长
+
+/* 重试机制配置 */
+#define I2C_MAX_RETRY_COUNT         3                   // 最大重试次数
+/* ============================================================ */
+
+
+#define MPU6050_DEVICE_ADRESS 	0x68		//MPU6050 设备地址
 #define MPU6050_PWR_MGMT_1 		0x6B  	// 电源管理1寄存器
 #define MPU6050_PWR_MGMT_2 		0x6C  	// 电源管理2寄存器
 #define MPU6050_SMPLRT_DIV 		0x19		//配置陀螺仪输出速率的分频系数
@@ -130,231 +141,348 @@ struct Pressure_Data {
 	uint32_t pressure;
 };
 
-/* iic发送一个字节 */
+/**
+ * @brief 带重试机制的 I2C DMA 读取（同步等待完成）
+ *        使用互斥锁 + 二值信号量双锁机制
+ * @param hi2c: I2C 句柄
+ * @param DevAddress: 设备地址
+ * @param MemAddress: 寄存器地址
+ * @param MemAddSize: 地址长度
+ * @param pData: 数据缓冲区
+ * @param Size: 数据长度
+ * @param timeout: 单次超时时间
+ * @param max_retry: 最大重试次数
+ * @retval HAL_StatusTypeDef 状态
+ */
+static HAL_StatusTypeDef I2C_Mem_Read_DMA_WithRetry(
+    I2C_HandleTypeDef *hi2c,
+    uint16_t DevAddress,
+    uint16_t MemAddress,
+    uint16_t MemAddSize,
+    uint8_t *pData,
+    uint16_t Size,
+    TickType_t timeout,
+    uint8_t max_retry  // 新增：最大重试次数
+) {
+	HAL_StatusTypeDef status = HAL_ERROR;
+	uint8_t retry_count = 0;
+
+	while (retry_count < max_retry) {
+		if (xSemaphoreTake(I2CMutex, timeout) == pdTRUE) {
+			// 清理上一次遗留的完成信号，避免误判 DMA 已完成。
+			(void)xSemaphoreTake(I2CDoneSemaphore, 0);
+
+			status = HAL_I2C_Mem_Read_DMA(hi2c, DevAddress, MemAddress, MemAddSize, pData, Size);
+			if (status == HAL_OK) {
+				if (xSemaphoreTake(I2CDoneSemaphore, timeout) == pdTRUE) {
+					xSemaphoreGive(I2CMutex);
+					return HAL_OK;
+				}
+			}
+
+			xSemaphoreGive(I2CMutex);
+			retry_count++;
+		} else {
+			retry_count++;
+		}
+
+		if (retry_count < max_retry) {
+			vTaskDelay(pdMS_TO_TICKS(1));
+		}
+	}
+
+	return HAL_ERROR;
+}
+
+/**
+ * @brief 带重试机制的 I2C DMA 写入（同步等待完成）
+ *        使用互斥锁 + 二值信号量双锁机制
+ * @param hi2c: I2C 句柄
+ * @param DevAddress: 设备地址
+ * @param MemAddress: 寄存器地址
+ * @param MemAddSize: 地址长度
+ * @param pData: 数据缓冲区
+ * @param Size: 数据长度（字节数）
+ * @param max_retry: 最大重试次数
+ * @retval HAL_StatusTypeDef 状态
+ */
+static HAL_StatusTypeDef I2C_Mem_Write_DMA_WithRetry(
+	I2C_HandleTypeDef *hi2c,
+	uint16_t DevAddress,
+	uint16_t MemAddress,
+	uint16_t MemAddSize,
+	uint8_t *pData,
+	uint16_t Size,
+	TickType_t timeout,
+	uint8_t max_retry  // 新增：最大重试次数
+) {
+	HAL_StatusTypeDef status = HAL_ERROR;
+	uint8_t retry_count = 0;
+
+	while (retry_count < max_retry) {
+		if (xSemaphoreTake(I2CMutex, timeout) == pdTRUE) {
+			(void)xSemaphoreTake(I2CDoneSemaphore, 0);
+
+			status = HAL_I2C_Mem_Write_DMA(hi2c, DevAddress, MemAddress, MemAddSize, pData, Size);
+			if (status == HAL_OK) {
+				if (xSemaphoreTake(I2CDoneSemaphore, timeout) == pdTRUE) {
+					xSemaphoreGive(I2CMutex);
+					return HAL_OK;
+				}
+			}
+
+			xSemaphoreGive(I2CMutex);
+			retry_count++;
+		} else {
+			retry_count++;
+		}
+
+		if (retry_count < max_retry) {
+			vTaskDelay(pdMS_TO_TICKS(1));
+		}
+	}
+
+	return HAL_ERROR;
+}
+
+/**
+ * @brief 带重试机制的 I2C DMA 主机发送（同步等待完成）
+ *        使用互斥锁 + 二值信号量双锁机制
+ * @param hi2c: I2C 句柄
+ * @param DevAddress: 设备地址
+ * @param pData: 数据缓冲区
+ * @param Size: 数据长度（字节数）
+ * @param max_retry: 最大重试次数
+ * @retval HAL_StatusTypeDef 状态
+ */
+static HAL_StatusTypeDef I2C_Master_Transmit_DMA_WithRetry(
+	I2C_HandleTypeDef *hi2c,
+	uint16_t DevAddress,
+	uint8_t *pData,
+	uint16_t Size,
+	TickType_t timeout,
+	uint8_t max_retry  // 新增：最大重试次数
+) {
+	HAL_StatusTypeDef status = HAL_ERROR;
+	uint8_t retry_count = 0;
+
+	while (retry_count < max_retry) {
+		if (xSemaphoreTake(I2CMutex, timeout) == pdTRUE) {
+			(void)xSemaphoreTake(I2CDoneSemaphore, 0);
+
+			status = HAL_I2C_Master_Transmit_DMA(hi2c, DevAddress, pData, Size);
+			if (status == HAL_OK) {
+				if (xSemaphoreTake(I2CDoneSemaphore, timeout) == pdTRUE) {
+					xSemaphoreGive(I2CMutex);
+					return HAL_OK;
+				}
+			}
+
+			xSemaphoreGive(I2CMutex);
+			retry_count++;
+		} else {
+			retry_count++;
+		}
+
+		if (retry_count < max_retry) {
+			vTaskDelay(pdMS_TO_TICKS(1));
+		}
+	}
+
+	return HAL_ERROR;
+}
+
+/**
+ * @brief 带重试机制的 I2C DMA 主机接收（同步等待完成）
+ *        使用互斥锁 + 二值信号量双锁机制
+ * @param hi2c: I2C 句柄
+ * @param DevAddress: 设备地址
+ * @param pData: 数据缓冲区
+ * @param Size: 数据长度（字节数）
+ * @param max_retry: 最大重试次数
+ * @retval HAL_StatusTypeDef 状态
+ */
+static HAL_StatusTypeDef I2C_Master_Receive_DMA_WithRetry(
+	I2C_HandleTypeDef *hi2c,
+	uint16_t DevAddress,
+	uint8_t *pData,
+	uint16_t Size,
+	TickType_t timeout,
+	uint8_t max_retry  // 新增：最大重试次数
+) {
+	HAL_StatusTypeDef status = HAL_ERROR;
+	uint8_t retry_count = 0;
+
+	while (retry_count < max_retry) {
+		if (xSemaphoreTake(I2CMutex, timeout) == pdTRUE) {
+			(void)xSemaphoreTake(I2CDoneSemaphore, 0);
+
+			status = HAL_I2C_Master_Receive_DMA(hi2c, DevAddress, pData, Size);
+			if (status == HAL_OK) {
+				if (xSemaphoreTake(I2CDoneSemaphore, timeout) == pdTRUE) {
+					xSemaphoreGive(I2CMutex);
+					return HAL_OK;
+				}
+			}
+
+			xSemaphoreGive(I2CMutex);
+			retry_count++;
+		} else {
+			retry_count++;
+		}
+
+		if (retry_count < max_retry) {
+			vTaskDelay(pdMS_TO_TICKS(1));
+		}
+	}
+
+	return HAL_ERROR;
+}
+
+/* iic 发送一个字节 */
 void IIC_Write(uint8_t addr,uint8_t RegAddr,uint8_t data){
-    static uint8_t buffer;
-	buffer  = data;
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        HAL_I2C_Mem_Write_DMA(&hi2c1, addr<<1, RegAddr, I2C_MEMADD_SIZE_8BIT, &buffer, 1);
-    }
+	uint8_t buffer = data;
+	(void)I2C_Mem_Write_DMA_WithRetry(&hi2c1, addr << 1, RegAddr, I2C_MEMADD_SIZE_8BIT,
+									  &buffer, 1, I2C_TIMEOUT_FAST_DEVICE, I2C_MAX_RETRY_COUNT);
 }
 
 void IIC_Write_MS5611(uint8_t addr, uint8_t cmd){
-	static uint8_t buf;
-	buf = cmd;
-   if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-       HAL_I2C_Master_Transmit_DMA(&hi2c1, addr<<1, &buf, 1);
-   }
+	uint8_t buf = cmd;
+	(void)I2C_Master_Transmit_DMA_WithRetry(&hi2c1, addr << 1, &buf, 1, I2C_TIMEOUT_PRESSURE,
+											I2C_MAX_RETRY_COUNT);
 }
 
 uint8_t IIC_Read(uint8_t addr,uint8_t RegAddr){
-    static uint8_t data = 0;
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        HAL_I2C_Mem_Read_DMA(&hi2c1, addr<<1, RegAddr, I2C_MEMADD_SIZE_8BIT, &data, 1);
+	uint8_t data = 0;
+	if (I2C_Mem_Read_DMA_WithRetry(&hi2c1, addr << 1, RegAddr, I2C_MEMADD_SIZE_8BIT,
+								   &data, 1, I2C_TIMEOUT_FAST_DEVICE, I2C_MAX_RETRY_COUNT) == HAL_OK) {
+		return data;
     }
-    
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		return data;    
-	}
+
+	return 0;
 }
 
 uint32_t MS5611_Read(uint8_t cmd){
-   static uint32_t data=0;
-   static uint8_t buffer[3];
-	static uint8_t cmd_buf;
-	cmd_buf = cmd;
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		HAL_I2C_Master_Transmit_DMA(&hi2c1, MS5611_DEVICE_ADRESS<<1, &cmd_buf, 1);
-   }
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		HAL_I2C_Master_Receive_DMA(&hi2c1, MS5611_DEVICE_ADRESS<<1, buffer, 3);
+	uint32_t data = 0;
+	uint8_t buffer[3] = {0};
+	uint8_t cmd_buf = cmd;
+
+	if (I2C_Master_Transmit_DMA_WithRetry(&hi2c1, MS5611_DEVICE_ADRESS << 1,
+										  &cmd_buf, 1, I2C_TIMEOUT_PRESSURE,
+										  I2C_MAX_RETRY_COUNT) != HAL_OK) {
+		return 0;
 	}
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		data = (buffer[0] << 16) | (buffer[1] << 8) | buffer[2];
-		xSemaphoreGive(I2CSemaphore);
+
+	if (I2C_Master_Receive_DMA_WithRetry(&hi2c1, MS5611_DEVICE_ADRESS << 1,
+										 buffer, 3, I2C_TIMEOUT_PRESSURE,
+										 I2C_MAX_RETRY_COUNT) != HAL_OK) {
+		return 0;
 	}
-   return data;
+
+	data = (buffer[0] << 16) | (buffer[1] << 8) | buffer[2];
+	return data;
 }
 
-/* 通过MPU6050辅助I2C读取HMC5883L三轴磁力计数据 */
+/* 通过 MPU6050 辅助 I2C 读取 HMC5883L 三轴磁力计数据 */
 void HMC5883L_Read_MAG(int16_t *arr){
    uint8_t data[6];
-    
-   // 通过MPU6050的外部传感器数据寄存器读取HMC5883L数据
-   if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		HAL_I2C_Mem_Read_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_EXT_SENS_DATA_00, 
-			I2C_MEMADD_SIZE_8BIT, data, 6);
+
+   // HMC5883L 是低频传感器（50Hz），使用标准重试次数
+   if (I2C_Mem_Read_DMA_WithRetry(&hi2c1, MPU6050_DEVICE_ADRESS << 1,
+								  MPU6050_EXT_SENS_DATA_00, I2C_MEMADD_SIZE_8BIT,
+								  data, 6, I2C_TIMEOUT_FAST_DEVICE, I2C_MAX_RETRY_COUNT) == HAL_OK) {
+		arr[0] = (data[0] << 8) | data[1];	//X 轴
+		arr[2] = (data[2] << 8) | data[3];	//Z 轴
+		arr[1] = (data[4] << 8) | data[5];	//Y 轴
    }
-    
-	 
-   // 按照HMC5883L的数据格式读取XYZ轴数据
-   if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		arr[0] = (data[0] << 8) | data[1];	//X轴
-		arr[2] = (data[2] << 8) | data[3];	//Z轴
-		arr[1] = (data[4] << 8) | data[5];	//Y轴
-		xSemaphoreGive(I2CSemaphore);
-	}
 }
 
-/* 通过MPU6050辅助I2C写入HMC5883L寄存器 */
+/* 通过 MPU6050 辅助 I2C 写入 HMC5883L 寄存器 */
 void HMC5883L_WriteReg(uint8_t reg, uint8_t data) {
-    static uint8_t buf;
-    
-    // 设置从机0写HMC5883L的寄存器地址
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        buf = HMC5883L_ADDRESS << 1;  // 写地址
-        HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_I2C_SLV0_ADDR, 
-            I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-    }
+	// 设置从机 0 写 HMC5883L 的寄存器地址
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_I2C_SLV0_ADDR, (uint8_t)(HMC5883L_ADDRESS << 1));
     vTaskDelay(pdMS_TO_TICKS(1));
 	 
     // 设置要写的寄存器地址
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        buf = reg;
-        HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_I2C_SLV0_REG, 
-            I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-    }
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_I2C_SLV0_REG, reg);
     vTaskDelay(pdMS_TO_TICKS(1));
 	 
     // 设置要写入的数据
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        buf = data;
-        HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_I2C_SLV0_DO, 
-            I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-    }
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_I2C_SLV0_DO, data);
     vTaskDelay(pdMS_TO_TICKS(1));
 	 
-    // 启用传输1字节
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        buf = 0x81;  // 启用并传输1字节
-        HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_I2C_SLV0_CTRL, 
-            I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-    }
+    // 启用传输 1 字节
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_I2C_SLV0_CTRL, 0x81);
 	 vTaskDelay(pdMS_TO_TICKS(1));
 }
 
-/* 通过MPU6050辅助I2C设置HMC5883L自动读取 */
+/* 通过 MPU6050 辅助 I2C 设置 HMC5883L 自动读取 */
 void HMC5883L_SetupAutoRead(void) {
-    static uint8_t buf;
-    
-    // 配置从机0读取HMC5883L的数据
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        buf = HMC5883L_ADDRESS | 0x80;  // 读地址
-        HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_I2C_SLV0_ADDR, 
-            I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-    }
+	// 配置从机 0 读取 HMC5883L 的数据
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_I2C_SLV0_ADDR, (uint8_t)(HMC5883L_ADDRESS | 0x80));
 	 vTaskDelay(pdMS_TO_TICKS(1));
-    
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        buf = HMC5883L_X_OUT_H;
-        HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_I2C_SLV0_REG, 
-            I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-    }
+
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_I2C_SLV0_REG, HMC5883L_X_OUT_H);
 	 vTaskDelay(pdMS_TO_TICKS(1));
-    
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        buf = 0x86;  // 启用并传输6字节
-        HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_I2C_SLV0_CTRL, 
-            I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-    }
+
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_I2C_SLV0_CTRL, 0x86);  // 启用并传输 6 字节
 	 vTaskDelay(pdMS_TO_TICKS(1));
 }
 
 void MPU6050_Init(){
-	static uint8_t buf;
-	
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x01;
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_PWR_MGMT_1, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x00;
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_PWR_MGMT_2, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x01;
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_SMPLRT_DIV, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x02;
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_CONFIG, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x18;		//设置陀螺仪量程为2000
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_GYRO_CONFIG, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x00;		//设置加速度计量程为2
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_ACCEL_CONFIG, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x00;
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_INT_ENABLE, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_PWR_MGMT_1, 0x01);
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_PWR_MGMT_2, 0x00);
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_SMPLRT_DIV, 0x01);
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_CONFIG, 0x02);
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_GYRO_CONFIG, 0x18);   // 设置陀螺仪量程为 2000
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_ACCEL_CONFIG, 0x00);  // 设置加速度计量程为 2
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_INT_ENABLE, 0x00);
 }
 
 void MPU6050_Read_GYRO(int16_t *arr){
-	static uint8_t data[6];
-	
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		HAL_I2C_Mem_Read_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_REG_GYRO_XOUT_H, 
-			I2C_MEMADD_SIZE_8BIT, data, 6);
-	}
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
+	uint8_t data[6];
+
+	// MPU6050 是高频传感器（500Hz），数据更新快，只需重试 1 次
+	if (I2C_Mem_Read_DMA_WithRetry(&hi2c1, MPU6050_DEVICE_ADRESS << 1,
+			MPU6050_REG_GYRO_XOUT_H, I2C_MEMADD_SIZE_8BIT, data, 6,
+			I2C_TIMEOUT_FAST_DEVICE, 1) == HAL_OK) {
 		arr[0] = (data[0] << 8) | data[1];
 		arr[1] = (data[2] << 8) | data[3];
 		arr[2] = (data[4] << 8) | data[5];
-      xSemaphoreGive(I2CSemaphore);
 	}
 }
 
 void MPU6050_Read_ACCEL(int16_t *arr){
-	static uint8_t data[6];
-	
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		HAL_I2C_Mem_Read_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_REG_ACCEL_XOUT_H, 
-			I2C_MEMADD_SIZE_8BIT, data, 6);
-	}
-	
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
+	uint8_t data[6];
+
+	// MPU6050 是高频传感器（500Hz），数据更新快，只需重试 1 次
+	if (I2C_Mem_Read_DMA_WithRetry(&hi2c1, MPU6050_DEVICE_ADRESS << 1,
+			MPU6050_REG_ACCEL_XOUT_H, I2C_MEMADD_SIZE_8BIT, data, 6,
+			I2C_TIMEOUT_FAST_DEVICE, 1) == HAL_OK) {
 		arr[0] = (data[0] << 8) | data[1];
 		arr[1] = (data[2] << 8) | data[3];
 		arr[2] = (data[4] << 8) | data[5];
-      xSemaphoreGive(I2CSemaphore);
 	}
 }
 
 uint8_t MPU6050_Check(){
-    static uint8_t id = 0;
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        HAL_I2C_Mem_Read_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_WHO_AM_I, 
-            I2C_MEMADD_SIZE_8BIT, &id, 1);
-    }
-    
+	uint8_t id = 0;
+	// ID 检查只需尝试 1 次
+	(void)I2C_Mem_Read_DMA_WithRetry(&hi2c1, MPU6050_DEVICE_ADRESS << 1, MPU6050_WHO_AM_I,
+									 I2C_MEMADD_SIZE_8BIT, &id, 1, I2C_TIMEOUT_FAST_DEVICE, 1);
+
     return (id == 0x68) ? 1 : 0;
 }
 
-// 检查HMC5883L的ID（旁路模式下直接读取）
+// 检查 HMC5883L 的 ID（旁路模式下直接读取）
 uint8_t HMC5883L_CheckID() {
     static uint8_t id_a, id_b, id_c;
-    
-    // 启用旁路模式以便直接读取HMC5883L
-    static uint8_t buf;
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        buf = 0x02;  // I2C_BYPASS_EN位设置为1
-        HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_INT_PIN_CFG, 
-            I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-    }
+
+	// 启用旁路模式以便直接读取 HMC5883L
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_INT_PIN_CFG, 0x02);
     vTaskDelay(pdMS_TO_TICKS(5));
     
-    // 直接读取HMC5883L的ID寄存器
+    // 直接读取 HMC5883L 的 ID 寄存器
     id_a = IIC_Read(HMC5883L_ADDRESS, 0x0A);
     vTaskDelay(pdMS_TO_TICKS(1));
     id_b = IIC_Read(HMC5883L_ADDRESS, 0x0B);
@@ -365,80 +493,55 @@ uint8_t HMC5883L_CheckID() {
     
  
     
-    // HMC5883L的ID应该是0x48('H') 0x34('4') 0x33('3')
+    // HMC5883L 的 ID 应该是 0x48('H') 0x34('4') 0x33('3')
     return (id_a == 0x48 && id_b == 0x34 && id_c == 0x33);
 }
 
 void HMC5883L_Init(){
-	// 按照手册步骤初始化HMC5883L
+	// 按照手册步骤初始化 HMC5883L
 	
-	// 第一步：确保硬件连接正确（已在PCB上完成）
+	// 第一步：确保硬件连接正确（已在 PCB 上完成）
 	
 	// 第二步：配置外部模块（通过旁路模式）
-	// 启用旁路模式，让MCU可以直接与HMC5883L通信
-	static uint8_t buf;
-	
-	
-	// 重置I2C主控
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x80;  // I2C_MST_RST位设置为1
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_USER_CTRL, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
+	// 启用旁路模式，让 MCU 可以直接与 HMC5883L 通信
+	// 重置 I2C 主控
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_USER_CTRL, 0x80);
 	vTaskDelay(pdMS_TO_TICKS(1));
 	
 	// 启用旁路模式
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x02;  // I2C_BYPASS_EN位设置为1
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_INT_PIN_CFG, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_INT_PIN_CFG, 0x02);
 	vTaskDelay(pdMS_TO_TICKS(1));
 	
 	
 	
-	// 直接配置HMC5883L（旁路模式下MCU可以直接与其通信）
-	// 配置HMC5883L寄存器
+	// 直接配置 HMC5883L（旁路模式下 MCU 可以直接与其通信）
+	// 配置 HMC5883L 寄存器
 	IIC_Write(HMC5883L_ADDRESS, HMC5883L_REG_CONFA, 0x78);  // 8-sample avg, 15Hz data rate
 	vTaskDelay(pdMS_TO_TICKS(1));
 	IIC_Write(HMC5883L_ADDRESS, HMC5883L_REG_CONFB, 0x60);  // 量程
 	vTaskDelay(pdMS_TO_TICKS(1));
 	IIC_Write(HMC5883L_ADDRESS, HMC5883L_REG_MODE, 0x00);   // 开启连续测量模式
 	vTaskDelay(pdMS_TO_TICKS(1));
-	// 第三步：配置MPU6050的I²C主控制器
+	// 第三步：配置 MPU6050 的 I²C 主控制器
 	
 	// 禁用旁路模式
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x00;  
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_INT_PIN_CFG, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_INT_PIN_CFG, 0x00);
 	vTaskDelay(pdMS_TO_TICKS(1));
 	
-	// 禁用旁路模式，启用I2C主控模式
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		buf = 0x20;  // I2C_MST_EN位设置为1
-		HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_USER_CTRL, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));
-	}
+	// 禁用旁路模式，启用 I2C 主控模式
+	IIC_Write(MPU6050_DEVICE_ADRESS, MPU6050_USER_CTRL, 0x20);
 	vTaskDelay(pdMS_TO_TICKS(3));
 	
-	// 配置I2C主控时钟和延迟
+	// 配置 I2C 主控时钟和延迟
 	vTaskDelay(pdMS_TO_TICKS(1));
 	
-	// 配置从机0自动读取HMC5883L的数据
+	// 配置从机 0 自动读取 HMC5883L 的数据
 	HMC5883L_SetupAutoRead();
 	vTaskDelay(pdMS_TO_TICKS(1));
 }
 
 void MS5611_Init(){
-	static uint8_t cmd_buf;
-	
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		cmd_buf = MS5611_CMD_RESET;
-		HAL_I2C_Master_Transmit_DMA(&hi2c1, MS5611_DEVICE_ADRESS<<1, 
-			&cmd_buf, sizeof(uint8_t));
-	}
+	IIC_Write_MS5611(MS5611_DEVICE_ADRESS, MS5611_CMD_RESET);
    vTaskDelay(pdMS_TO_TICKS(2)); // 复位后至少等待 2ms（手册建议）
 	
 	c[1]=37856; 
@@ -448,10 +551,16 @@ void MS5611_Init(){
 	c[5]=24205; 
 	c[6]=33958;
 	/*
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
+	if (xSemaphoreTake(I2CMutex, pdMS_TO_TICKS(30)) == pdTRUE){
 		cmd_buf2 = 0xA0;		//PROM 读取启动命令
 		HAL_I2C_Master_Transmit_DMA(&hi2c1, MS5611_DEVICE_ADRESS<<1, 
 			&cmd_buf2, sizeof(uint8_t));
+		
+		if (xSemaphoreTake(I2CDoneSemaphore, pdMS_TO_TICKS(30)) == pdTRUE){
+			xSemaphoreGive(I2CMutex);
+		} else {
+			xSemaphoreGive(I2CMutex);
+		}
 	}
 	
 	// 读取校准系数
@@ -459,16 +568,25 @@ void MS5611_Init(){
 	for (uint8_t i = 0; i < 6; i++) {
 		 cmd_buf = MS5611_CMD_READ_PROM + (i * 2);
 		
-		if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
+		if (xSemaphoreTake(I2CMutex, pdMS_TO_TICKS(30)) == pdTRUE){
 			HAL_I2C_Master_Transmit_DMA(&hi2c1, MS5611_DEVICE_ADRESS<<1, &cmd_buf, 1);
+			
+			if (xSemaphoreTake(I2CDoneSemaphore, pdMS_TO_TICKS(30)) == pdTRUE){
+				xSemaphoreGive(I2CMutex);
+			} else {
+				xSemaphoreGive(I2CMutex);
+			}
 		}
 		vTaskDelay(pdMS_TO_TICKS(1)); 			// 必须延时 1ms，等待传感器内部读取完成！
-		if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
+		if (xSemaphoreTake(I2CMutex, pdMS_TO_TICKS(30)) == pdTRUE){
 			HAL_I2C_Master_Receive_DMA(&hi2c1, MS5611_DEVICE_ADRESS<<1, buffer, 2);
-		}
-		if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-			c[i+1] = (buffer[0] << 8) | buffer[1];
-			xSemaphoreGive(I2CSemaphore);
+			
+			if (xSemaphoreTake(I2CDoneSemaphore, pdMS_TO_TICKS(5)) == pdTRUE){
+				c[i+1] = (buffer[0] << 8) | buffer[1];
+				xSemaphoreGive(I2CMutex);
+			} else {
+				xSemaphoreGive(I2CMutex);
+			}
 		}
 	}*/
 	
@@ -533,14 +651,10 @@ int16_t b1, b2, mb, mc, md;
 void BMP180_Init()
 {
 	vTaskDelay(pdMS_TO_TICKS(11));
-	static uint8_t prom[22];
-	//读取校准系数
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		HAL_I2C_Mem_Read_DMA(&hi2c1, BMP180_DEVICE_ADDR<<1, BMP180_PROM_START_ADDR, 
-			I2C_MEMADD_SIZE_8BIT, prom, 22);
-	}
-	
-	if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
+	uint8_t prom[22];
+	//读取校准系数（初始化时使用标准重试次数）
+	if (I2C_Mem_Read_DMA_WithRetry(&hi2c1, BMP180_DEVICE_ADDR << 1, BMP180_PROM_START_ADDR,
+			I2C_MEMADD_SIZE_8BIT, prom, 22, I2C_TIMEOUT_INIT, I2C_MAX_RETRY_COUNT) == HAL_OK) {
 		ac1 = (int16_t)((prom[0] << 8) | prom[1]);
 		ac2 = (int16_t)((prom[2] << 8) | prom[3]);
 		ac3 = (int16_t)((prom[4] << 8) | prom[5]);
@@ -552,32 +666,26 @@ void BMP180_Init()
 		mb  = (int16_t)((prom[16]<< 8) | prom[17]);
 		mc  = (int16_t)((prom[18]<< 8) | prom[19]);
 		md  = (int16_t)((prom[20]<< 8) | prom[21]);
-      xSemaphoreGive(I2CSemaphore);
 	}
 }
 
 // 读取未补偿温度值
 uint16_t bmp180_read_ut()
 {
-   static uint8_t temp_data[2];
-	uint16_t ut;
+   uint8_t temp_data[2];
+	uint16_t ut = 0;
     
     // 发送温度测量命令
     IIC_Write(BMP180_DEVICE_ADDR, BMP180_REG_CTRL_MEAS, BMP180_CMD_TEMP);
     
-    // 等待转换完成 (最大4.5ms)
+    // 等待转换完成 (最大 4.5ms)
     vTaskDelay(pdMS_TO_TICKS(5));
     
-    // 读取温度数据
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        HAL_I2C_Mem_Read_DMA(&hi2c1, BMP180_DEVICE_ADDR<<1, BMP180_REG_ADC_OUT_MSB, 
-            I2C_MEMADD_SIZE_8BIT, temp_data, 2);
-    }
-    
-    // 组合MSB和LSB得到温度原始值
-	 if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
+    // 读取温度数据（气压计使用标准重试次数）
+	if (I2C_Mem_Read_DMA_WithRetry(&hi2c1, BMP180_DEVICE_ADDR << 1, BMP180_REG_ADC_OUT_MSB,
+								   I2C_MEMADD_SIZE_8BIT, temp_data, 2,
+								   I2C_TIMEOUT_FAST_DEVICE, I2C_MAX_RETRY_COUNT) == HAL_OK) {
 		ut = (temp_data[0] << 8) | temp_data[1];
-		xSemaphoreGive(I2CSemaphore);
     }
 	 return ut;
 }
@@ -586,30 +694,25 @@ uint16_t bmp180_read_ut()
 uint32_t bmp180_read_up()
 {
     uint8_t press_data[3];
-    uint32_t raw_press;
+	uint32_t raw_press = 0;
     
     // 发送压力测量命令，使用标准分辨率
     IIC_Write(BMP180_DEVICE_ADDR, BMP180_REG_CTRL_MEAS, 
               BMP180_CMD_PRESSURE_STANDARD + (BMP180_OSS_ULTRA_LOW << 6));
     
-    // 等待转换完成 (最大7.5ms)
+    // 等待转换完成 (最大 7.5ms)
     vTaskDelay(pdMS_TO_TICKS(10));
     
-    // 读取压力数据 (3字节: MSB, LSB, XLSB)
-    if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-        HAL_I2C_Mem_Read_DMA(&hi2c1, BMP180_DEVICE_ADDR<<1, BMP180_REG_ADC_OUT_MSB, 
-            I2C_MEMADD_SIZE_8BIT, press_data, 3);
-    }
-    
-    // 组合3字节数据
-	 if (xSemaphoreTake(I2CSemaphore, portMAX_DELAY) == pdTRUE){
-		raw_press = ((uint32_t)press_data[0] << 16) | 
-						((uint32_t)press_data[1] << 8) | 
+    // 读取压力数据（气压计使用标准重试次数）
+	if (I2C_Mem_Read_DMA_WithRetry(&hi2c1, BMP180_DEVICE_ADDR << 1, BMP180_REG_ADC_OUT_MSB,
+			I2C_MEMADD_SIZE_8BIT, press_data, 3, I2C_TIMEOUT_FAST_DEVICE, I2C_MAX_RETRY_COUNT) == HAL_OK) {
+		raw_press = ((uint32_t)press_data[0] << 16) |
+						((uint32_t)press_data[1] << 8) |
 						(uint32_t)press_data[2];
-		xSemaphoreGive(I2CSemaphore);
-    }            
+	}
+
 		 
-    // 右移(8-OSS)位以获取最终结果
+    // 右移 (8-OSS) 位以获取最终结果
     raw_press >>= (8 - BMP180_OSS_ULTRA_LOW);
     
     return raw_press;

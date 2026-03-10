@@ -41,6 +41,8 @@ static inline float rcNormalize(uint16_t rc)
 
 void AttitudeController_Init(AttitudeController_t* ctrl, float dt)
 {
+    const float outerDt = 1.0f / (float)CONFIG_OUTER_LOOP_RATE_HZ;
+
     if (ctrl == NULL)
     {
         return;
@@ -48,13 +50,13 @@ void AttitudeController_Init(AttitudeController_t* ctrl, float dt)
 
     ctrl->dt = dt;
 
-        /* 先创建PID对象，再加载参数档位 */
+        /* 角度外环按较低频率运行，避免将高频IMU噪声直接放大到角速度设定。 */
         pidInit(&ctrl->rollAnglePid, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-            dt, 1.0f / dt, 30.0f, true);
+            outerDt, (float)CONFIG_OUTER_LOOP_RATE_HZ, 30.0f, true);
     pidSetIntegralLimit(&ctrl->rollAnglePid, 20.0f);
 
         pidInit(&ctrl->pitchAnglePid, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-            dt, 1.0f / dt, 30.0f, true);
+            outerDt, (float)CONFIG_OUTER_LOOP_RATE_HZ, 30.0f, true);
     pidSetIntegralLimit(&ctrl->pitchAnglePid, 20.0f);
 
         pidInit(&ctrl->rollRatePid, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
@@ -157,7 +159,8 @@ void AttitudeController_GenerateSetpoint(const ControlInput_t* input, AttitudeSe
 void AttitudeController_Update(AttitudeController_t* ctrl,
                                const AttitudeSetpoint_t* sp,
                                const AttitudeState_t* state,
-                               bool isAcro)
+                               bool isAcro,
+                               bool updateOuterLoop)
 {
     if (ctrl == NULL || sp == NULL || state == NULL)
     {
@@ -171,14 +174,17 @@ void AttitudeController_Update(AttitudeController_t* ctrl,
     }
     else
     {
-        pidSetDesired(&ctrl->rollAnglePid, sp->roll);
-        pidSetDesired(&ctrl->pitchAnglePid, sp->pitch);
+        if (updateOuterLoop)
+        {
+            pidSetDesired(&ctrl->rollAnglePid, sp->roll);
+            pidSetDesired(&ctrl->pitchAnglePid, sp->pitch);
 
-        ctrl->rollRateSp = pidUpdate(&ctrl->rollAnglePid, state->roll, false);
-        ctrl->pitchRateSp = pidUpdate(&ctrl->pitchAnglePid, state->pitch, false);
+            ctrl->rollRateSp = pidUpdate(&ctrl->rollAnglePid, state->roll, false);
+            ctrl->pitchRateSp = pidUpdate(&ctrl->pitchAnglePid, state->pitch, false);
 
-        ctrl->rollRateSp = constrain(ctrl->rollRateSp, -CONFIG_MAX_ROLL_RATE, CONFIG_MAX_ROLL_RATE);
-        ctrl->pitchRateSp = constrain(ctrl->pitchRateSp, -CONFIG_MAX_PITCH_RATE, CONFIG_MAX_PITCH_RATE);
+            ctrl->rollRateSp = constrain(ctrl->rollRateSp, -CONFIG_MAX_ROLL_RATE, CONFIG_MAX_ROLL_RATE);
+            ctrl->pitchRateSp = constrain(ctrl->pitchRateSp, -CONFIG_MAX_PITCH_RATE, CONFIG_MAX_PITCH_RATE);
+        }
     }
 
     ctrl->yawRateSp = constrain(sp->yawRate, -CONFIG_MAX_YAW_RATE, CONFIG_MAX_YAW_RATE);

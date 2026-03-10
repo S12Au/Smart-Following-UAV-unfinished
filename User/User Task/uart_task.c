@@ -10,8 +10,45 @@
 #include "getPPM_task.h"
 #include "FlightControl.h"
 #include "autoconf.h"
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
+
+#define UART1_RX_RING_SIZE 256u
+
+static volatile uint8_t s_uart1RxRing[UART1_RX_RING_SIZE];
+static volatile uint16_t s_uart1RxHead = 0;
+static volatile uint16_t s_uart1RxTail = 0;
+static volatile uint8_t s_uart1RxOverflow = 0;
+static uint8_t s_uart1RxByte = 0;
+
+static void uart1RxStartIT(void)
+{
+	if (HAL_UART_Receive_IT(&huart1, &s_uart1RxByte, 1) != HAL_OK)
+	{
+		/* 下次任务循环会继续重试启动中断接收 */
+	}
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart)
+{
+	if (huart->Instance == USART1)
+	{
+		uint16_t nextHead = (uint16_t)((s_uart1RxHead + 1u) % UART1_RX_RING_SIZE);
+
+		if (nextHead != s_uart1RxTail)
+		{
+			s_uart1RxRing[s_uart1RxHead] = s_uart1RxByte;
+			s_uart1RxHead = nextHead;
+		}
+		else
+		{
+			s_uart1RxOverflow = 1u;
+		}
+
+		uart1RxStartIT();
+	}
+}
 
 static int tokenEquals(const char* a, const char* b)
 {
@@ -204,7 +241,7 @@ static void handleUartCommand(char* line)
 		}
 
 		value = strtof(arg4, &endPtr);
-		if (endPtr == arg4 || *endPtr != '\0')
+		if (endPtr == arg4 || *endPtr != '\0' || !isfinite(value))
 		{
 			printf("PID,ERR,invalid value\r\n");
 			return;
@@ -212,7 +249,23 @@ static void handleUartCommand(char* line)
 
 		if (!FlightControl_SetPidGain(pidId, gainType, value))
 		{
-			printf("PID,ERR,set failed\r\n");
+			FlightPidSetError_t err = FlightControl_GetLastPidSetError();
+
+			switch (err)
+			{
+				case FLIGHT_PID_SET_ERR_NOT_DISARMED:
+					printf("PID,ERR,forbidden:not_disarmed\r\n");
+					break;
+				case FLIGHT_PID_SET_ERR_FLASH_WRITE:
+					printf("PID,ERR,flash_write_failed\r\n");
+					break;
+				case FLIGHT_PID_SET_ERR_INVALID_INPUT:
+					printf("PID,ERR,invalid_input\r\n");
+					break;
+				default:
+					printf("PID,ERR,set failed\r\n");
+					break;
+			}
 			return;
 		}
 
@@ -232,6 +285,10 @@ static void handleUartCommand(char* line)
 	printf("PID,ERR,unknown subcmd\r\n");
 }
 
+/**
+ * @brief 处理 UART 接收数据，解析命令并执行相应操作
+ * @note 该函数会被主任务循环调用，以处理 UART 接
+ */
 static void processUartRx(void)
 {
 	static char rxLine[96];
@@ -239,12 +296,24 @@ static void processUartRx(void)
 	uint8_t ch;
 	uint8_t i;
 
+	uart1RxStartIT();
+
+	if (s_uart1RxOverflow != 0u)
+	{
+		s_uart1RxOverflow = 0u;
+		rxLen = 0;
+		printf("PID,ERR,uart_rx_overflow\r\n");
+	}
+
 	for (i = 0; i < 32; i++)
 	{
-		if (HAL_UART_Receive(&huart1, &ch, 1, 0) != HAL_OK)
+		if (s_uart1RxTail == s_uart1RxHead)
 		{
 			break;
 		}
+
+		ch = s_uart1RxRing[s_uart1RxTail];
+		s_uart1RxTail = (uint16_t)((s_uart1RxTail + 1u) % UART1_RX_RING_SIZE);
 
 		if (ch == '\r' || ch == '\n')
 		{
@@ -275,6 +344,8 @@ void Uart_Send_Task()
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 	const TickType_t xPeriod = pdMS_TO_TICKS(1000 / CONFIG_UART_DEBUG_RATE_HZ);
 
+	uart1RxStartIT();
+
 	printf("FC,st,lk,cal,thr,r,p,y,rSp,pSp,ySp,rOut,pOut,yOut,m1,m2,m3,m4\r\n");
 	while(1)
 	{
@@ -303,4 +374,42 @@ void Uart_Send_Task()
 		vTaskDelayUntil(&xLastWakeTime, xPeriod);
 	
 	}
+	/*
+	struct GYRO_ACCEL_Data GYRO_ACCEL_Rdata;
+	struct MAG_Data MAG_Rdata;
+	struct Pressure_Data Pressure_Rdata;
+	struct PPM_Data PPM_Rdata;
+	while(1)
+	{
+		
+		printf("\r\n\r\n");
+		
+		xQueueReceive(QueueGYROACCEL,&GYRO_ACCEL_Rdata,portMAX_DELAY);
+		for(uint8_t i=0; i<3; i++){
+			printf("%f ", (float)GYRO_ACCEL_Rdata.gyro[i] / 16.4);
+		}
+		printf("\r\n");
+		for(uint8_t i=0; i<3; i++){
+			printf("%f ", (float)GYRO_ACCEL_Rdata.accel[i] / 16384.0f * 9.80665f);
+		}
+		printf("\r\n");
+		
+		xQueueReceive(QueueMAG, &MAG_Rdata, portMAX_DELAY);
+		for(uint8_t i=0; i<3; i++){
+			printf("%d ", MAG_Rdata.mag[i]);
+		}
+		printf("\r\n");
+		
+		xQueueReceive(QueuePressure, &Pressure_Rdata, portMAX_DELAY);
+		printf("%d\r\n", Pressure_Rdata.pressure);
+		
+		
+		xQueueReceive(QueuePPM, &PPM_Rdata, portMAX_DELAY);
+		printf("%d", PPM_Rdata.ppmCh[0]);
+		
+
+		vTaskDelay(5);
+	
+	}
+	*/
 }

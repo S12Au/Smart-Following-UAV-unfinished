@@ -86,6 +86,8 @@ void AttitudeController_Init(AttitudeController_t* ctrl, float dt);
 
 /**
  * @brief 一键加载PID参数档位
+ * @param ctrl 姿态控制器
+ * @param profile PID档位
  */
 void AttitudeController_LoadProfile(AttitudeController_t* ctrl, PidProfile_t profile);
 
@@ -96,6 +98,8 @@ void AttitudeController_Reset(AttitudeController_t* ctrl, const AttitudeState_t*
 
 /**
  * @brief 根据遥控器输入生成姿态目标
+ * @param input 遥控器输入
+ * @param sp 输出的姿态目标
  */
 void AttitudeController_GenerateSetpoint(const ControlInput_t* input, AttitudeSetpoint_t* sp);
 
@@ -105,11 +109,13 @@ void AttitudeController_GenerateSetpoint(const ControlInput_t* input, AttitudeSe
  * @param sp 姿态目标
  * @param state 当前姿态状态
  * @param isAcro true: 角速度模式 false: 角度模式
+ * @param updateOuterLoop true: 更新外环 false: 不更新外环
  */
 void AttitudeController_Update(AttitudeController_t* ctrl,
                                const AttitudeSetpoint_t* sp,
                                const AttitudeState_t* state,
-                               bool isAcro);
+                               bool isAcro,
+                               bool updateOuterLoop);
 
 /**
  * @brief 四旋翼X构型混控

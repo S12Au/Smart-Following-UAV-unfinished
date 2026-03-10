@@ -47,7 +47,13 @@ void MX_I2C1_Init(void);
 /* USER CODE BEGIN Prototypes */
 extern uint8_t i2c_txflag;
 extern uint8_t i2c_rxflag;
-extern SemaphoreHandle_t I2CSemaphore;
+
+/* ==================== I2C 双锁机制声明 ====================
+ * I2CMutex: 互斥锁，保护 I2C 总线独占访问（带优先级继承）
+ * I2CDoneSemaphore: 二值信号量，通知 DMA 传输完成（同步用）
+ * ================================================ */
+extern SemaphoreHandle_t I2CMutex;           // 互斥锁 - 用于总线互斥访问
+extern SemaphoreHandle_t I2CDoneSemaphore;   // 二值信号量 - 用于 DMA 完成同步
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

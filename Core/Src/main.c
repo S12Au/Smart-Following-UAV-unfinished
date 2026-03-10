@@ -54,9 +54,6 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-static uint8_t g_rxBuffer[64]; // 接收缓冲区
-static uint16_t g_rxLength = 64; // 要接收的字节数
-
 static uint8_t g_test = 0;
 
 
@@ -221,20 +218,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-	if (huart->Instance == USART1)
-	{
-		
-		HAL_UARTEx_ReceiveToIdle_IT(&huart1, g_rxBuffer, g_rxLength); // 重新启动中断接收
-	}
-}
-
-
-
-
-
 
 /* USER CODE END 4 */
 

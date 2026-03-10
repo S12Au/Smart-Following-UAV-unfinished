@@ -17,17 +17,21 @@
 #include <string.h>
 
 #define FC_DT_MS    (1000 / CONFIG_CONTROLLER_RATE_HZ)
+#define FC_OUTER_LOOP_DIV  (CONFIG_CONTROLLER_RATE_HZ / CONFIG_OUTER_LOOP_RATE_HZ)
 #define PID_FLASH_ADDR       0x08060000U
 #define PID_FLASH_MAGIC      0x50494431U
 #define PID_FLASH_VERSION    0x00010000U
 #define RC_FILTER_ALPHA      0.20f
 
+/**
+ * @brief 飞行控制器 PID 参数持久化结构体
+ */
 typedef struct
 {
-    uint32_t magic;
-    uint32_t version;
-    float gains[FLIGHT_PID_COUNT][3];
-    uint32_t checksum;
+    uint32_t magic;       // 魔数标识（0x50494431U），用于验证 Flash 中 PID 数据的有效性
+    uint32_t version;     // 版本号（0x00010000U），用于管理 PID 参数格式的版本兼容性
+    float gains[FLIGHT_PID_COUNT][3];  // PID 增益参数数组 [通道数][3]，存储 P/I/D 三参数（单位：比例系数）
+    uint32_t checksum;    // 校验和，用于验证 Flash 中 PID 数据的完整性（防止数据损坏）
 } FlightPidPersist_t;
 
 /* ========== 飞控核心模块实例 ========== */
@@ -36,6 +40,7 @@ static AttitudeController_t g_controller;  // 双环 PID 姿态控制器（角�
 static PidObject g_altitudePid;            // 高度 PID 控制器（用于气压定高模式）
 static volatile FlightDebugData_t g_debug; // 调试数据（通过串口/OLED 实时输出）
 static FlightState_t g_flightState = FLIGHT_STATE_DISARMED;  // 当前飞行状态（解锁/锁定等）
+static volatile FlightPidSetError_t g_lastPidSetError = FLIGHT_PID_SET_OK;
 
 /* ========== 高度控制参数 ========== */
 static float g_altitudeSp = 0.0f;          // 目标设定点高度（米，定高模式使用）
@@ -53,6 +58,11 @@ static int64_t g_gyroSum[3] = {0, 0, 0};   // 陀螺仪累加和（用于滑动�
 static int64_t g_accelSum[3] = {0, 0, 0};  // 加速度计累加和（用于滑动平均滤波）
 static uint16_t g_calibCount = 0;          // 校准采样计数器
 
+/**
+ * @brief 计算 PID 参数的校验和
+ * @param data PID 参数结构体指针
+ * @return 校验和（32 位无符号整数）
+ */
 static uint32_t calcPersistChecksum(const FlightPidPersist_t* data)
 {
     const uint8_t* bytes = (const uint8_t*)data;
@@ -96,6 +106,11 @@ static uint16_t invertPpmChannelU16(uint16_t input)
     return (uint16_t)(CONFIG_PPM_MIN_VALID + CONFIG_PPM_MAX_VALID - constrained);
 }
 
+/** 
+ * @brief 根据 PID ID 获取对应的 PID 对象
+ * @param pidId PID ID
+ * @return PID 对象指针，若未找到则返回 0
+ */
 static PidObject* getPidObjectById(FlightPidId_t pidId)
 {
     switch (pidId)
@@ -117,6 +132,13 @@ static PidObject* getPidObjectById(FlightPidId_t pidId)
     }
 }
 
+/**
+ * @brief 设置 PID 参数
+ * @param pidId PID ID
+ * @param gainType 参数类型（比例系数、积分系数、微分系数）
+ * @param value 参数值
+ * @return 设置成功则返回 true，否则返回 false
+ */
 static bool setPidGainInternal(FlightPidId_t pidId, FlightGainType_t gainType, float value)
 {
     PidObject* pid = getPidObjectById(pidId);
@@ -126,7 +148,7 @@ static bool setPidGainInternal(FlightPidId_t pidId, FlightGainType_t gainType, f
         return false;
     }
 
-    if (value < 0.0f)
+    if (!isfinite(value) || value < 0.0f)
     {
         return false;
     }
@@ -147,10 +169,13 @@ static bool setPidGainInternal(FlightPidId_t pidId, FlightGainType_t gainType, f
     }
 }
 
-static bool savePidParamsToFlash(void)
+/**
+ * @brief 保存 PID 参数到 Flash
+ * @return 成功保存则返回 true，否则返回 false
+ * @note 函数会先擦除 Flash 中保存的 PID 参数，然后写入新的参数。
+ */
+static bool savePidParamsToFlash(const FlightPidPersist_t* data)
 {
-    FlightPidPersist_t data;
-    PidObject* pid;
     uint32_t wordAddress;
     uint32_t i;
     uint32_t sectorError = 0;
@@ -158,23 +183,10 @@ static bool savePidParamsToFlash(void)
     FLASH_EraseInitTypeDef erase;
     const uint32_t* words;
 
-    memset(&data, 0, sizeof(data));
-    data.magic = PID_FLASH_MAGIC;
-    data.version = PID_FLASH_VERSION;
-
-    for (i = 0; i < (uint32_t)FLIGHT_PID_COUNT; i++)
+    if (data == 0)
     {
-        pid = getPidObjectById((FlightPidId_t)i);
-        if (pid == 0)
-        {
-            return false;
-        }
-        data.gains[i][FLIGHT_GAIN_KP] = pid->kp;
-        data.gains[i][FLIGHT_GAIN_KI] = pid->ki;
-        data.gains[i][FLIGHT_GAIN_KD] = pid->kd;
+        return false;
     }
-
-    data.checksum = calcPersistChecksum(&data);
 
     HAL_FLASH_Unlock();
 
@@ -191,7 +203,7 @@ static bool savePidParamsToFlash(void)
         return false;
     }
 
-    words = (const uint32_t*)&data;
+    words = (const uint32_t*)data;
     wordAddress = PID_FLASH_ADDR;
     for (i = 0; i < (uint32_t)(sizeof(FlightPidPersist_t) / sizeof(uint32_t)); i++)
     {
@@ -208,6 +220,11 @@ static bool savePidParamsToFlash(void)
     return true;
 }
 
+/**
+ * @brief 从 Flash 中加载 PID 参数
+ * @return 读取成功则返回 true，否则返回 false
+ * @note 函数会先检查 Flash 中保存的 PID 参数的校验和，如果校验和正确，则读取参数。
+ */
 static bool loadPidParamsFromFlash(void)
 {
     const FlightPidPersist_t* data = (const FlightPidPersist_t*)PID_FLASH_ADDR;
@@ -469,21 +486,88 @@ void FlightControl_GetDebugSnapshot(FlightDebugData_t* out)
     *out = g_debug;
 }
 
+/**
+ * @brief 设置 PID 增益参数
+ * @param pidId PID ID
+ * @param gainType 增益类型
+ * @param value 增益值
+ * @return 设置是否成功
+ */
 bool FlightControl_SetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, float value)
 {
-    if (!setPidGainInternal(pidId, gainType, value))
+    FlightPidPersist_t data;
+    PidObject* pid;
+    uint32_t i;
+
+    g_lastPidSetError = FLIGHT_PID_SET_OK;
+
+    /* 禁止在已解锁/失控保护状态写入 Flash，避免飞行中产生实时性抖动。 */
+    if (g_flightState != FLIGHT_STATE_DISARMED)
     {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_NOT_DISARMED;
         return false;
     }
 
-    if (!savePidParamsToFlash())
+    if (!isfinite(value) || value < 0.0f)
     {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_INVALID_INPUT;
+        return false;
+    }
+
+    memset(&data, 0, sizeof(data));
+    data.magic = PID_FLASH_MAGIC;
+    data.version = PID_FLASH_VERSION;
+
+    for (i = 0; i < (uint32_t)FLIGHT_PID_COUNT; i++)
+    {
+        pid = getPidObjectById((FlightPidId_t)i);
+        if (pid == 0)
+        {
+            g_lastPidSetError = FLIGHT_PID_SET_ERR_INTERNAL;
+            return false;
+        }
+
+        data.gains[i][FLIGHT_GAIN_KP] = pid->kp;
+        data.gains[i][FLIGHT_GAIN_KI] = pid->ki;
+        data.gains[i][FLIGHT_GAIN_KD] = pid->kd;
+    }
+
+    if ((uint32_t)pidId >= (uint32_t)FLIGHT_PID_COUNT || (uint32_t)gainType > (uint32_t)FLIGHT_GAIN_KD)
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_INVALID_INPUT;
+        return false;
+    }
+
+    data.gains[pidId][gainType] = value;
+    data.checksum = calcPersistChecksum(&data);
+
+    if (!savePidParamsToFlash(&data))
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_FLASH_WRITE;
+        return false;
+    }
+
+    if (!setPidGainInternal(pidId, gainType, value))
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_INTERNAL;
         return false;
     }
 
     return true;
 }
 
+FlightPidSetError_t FlightControl_GetLastPidSetError(void)
+{
+    return g_lastPidSetError;
+}
+
+/**
+ * @brief 获取 PID 增益参数
+ * @param pidId PID ID
+ * @param gainType 增益类型
+ * @param outValue 储存获取的增益值的指针
+ * @return 获取是否成功
+ */
 bool FlightControl_GetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, float* outValue)
 {
     PidObject* pid = getPidObjectById(pidId);
@@ -518,14 +602,24 @@ void FlightControl_Task(void* params)
     (void)params;
 
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xPeriod = pdMS_TO_TICKS(2); /* 500Hz */
+    const TickType_t xPeriod = pdMS_TO_TICKS(FC_DT_MS); /* 内环 500Hz */
     float yawTargetDeg = 0.0f;          /* 当前目标偏航角，单位：度 */
+    uint16_t outerLoopCounter = 0;      /* 外环分频计数器 */
+    uint8_t updateOuterLoop = 1;        /* 本周期是否更新外环 */
 
     /* ========== 原始传感器数据接收 ========== */
     struct GYRO_ACCEL_Data imuRaw;      /* 原始 IMU 数据（陀螺仪 + 加速度计），单位：LSB */
     struct MAG_Data magRaw;             /* 原始磁力计数据，单位：LSB */
     struct Pressure_Data pressureRaw;   /* 原始气压计数据，单位：Pa */
     struct PPM_Data ppmRaw;             /* 原始遥控器 PPM 信号数据 */
+    struct GYRO_ACCEL_Data imuLast = {{0, 0, 0}, {0, 0, 0}};
+    struct MAG_Data magLast = {{0, 0, 0}};
+    struct Pressure_Data pressureLast = {0};
+    struct PPM_Data ppmLast = {{0}};
+    uint8_t imuSeen = 0;
+    uint8_t magSeen = 0;
+    uint8_t pressureSeen = 0;
+    uint8_t ppmSeen = 0;
     
     /* ========== 传感器数据时间戳管理（用于超时检测）========== */
     TickType_t lastPpmTick;             /* PPM 信号最后接收时间戳 */
@@ -581,18 +675,36 @@ void FlightControl_Task(void* params)
     for (;;)
     {
         nowTick = xTaskGetTickCount();
+        updateOuterLoop = (outerLoopCounter == 0u) ? 1u : 0u;
+        outerLoopCounter++;
+        if (outerLoopCounter >= FC_OUTER_LOOP_DIV)
+        {
+            outerLoopCounter = 0u;
+        }
 
         if (xQueueReceive(QueueMAG, &magRaw, 0) == pdTRUE)
         {
+            magLast = magRaw;
+            magSeen = 1;
             latestMagRaw[0] = magRaw.mag[0];
             latestMagRaw[1] = magRaw.mag[1];
             latestMagRaw[2] = magRaw.mag[2];
             magValid = 1;
             lastMagTick = nowTick;
         }
+        else if (magSeen)
+        {
+            /* 队列暂无新样本时沿用上一帧磁力计数据。 */
+            magRaw = magLast;
+            latestMagRaw[0] = magRaw.mag[0];
+            latestMagRaw[1] = magRaw.mag[1];
+            latestMagRaw[2] = magRaw.mag[2];
+        }
 
         if (xQueueReceive(QueuePressure, &pressureRaw, 0) == pdTRUE)
         {
+            pressureLast = pressureRaw;
+            pressureSeen = 1;
             float pressurePa = (float)pressureRaw.pressure;
 
             if (pressurePa > 1000.0f)
@@ -610,15 +722,29 @@ void FlightControl_Task(void* params)
                 altitudeM = pressureToAltitudeM(filteredPressurePa, g_baroRefPressurePa);
             }
         }
+        else if (pressureSeen)
+        {
+            /* 没有新气压样本时保留上次高度输入，不刷新超时计时。 */
+            pressureRaw = pressureLast;
+        }
 
         if (xQueueReceive(QueueGYROACCEL, &imuRaw, 0) == pdTRUE)
         {
+            imuLast = imuRaw;
+            imuSeen = 1;
             lastImuTick = nowTick;
             if (g_flightState != FLIGHT_STATE_ARMED)
             {
                 runBiasCalibrationStep(&imuRaw);
             }
+        }
+        else if (imuSeen)
+        {
+            imuRaw = imuLast;
+        }
 
+        if (imuSeen)
+        {
             gyroCorrected[0] = (int16_t)(imuRaw.gyro[0] - g_gyroBiasRaw[0]);
             gyroCorrected[1] = (int16_t)(imuRaw.gyro[1] - g_gyroBiasRaw[1]);
             gyroCorrected[2] = (int16_t)(imuRaw.gyro[2] - g_gyroBiasRaw[2]);
@@ -667,12 +793,23 @@ void FlightControl_Task(void* params)
         {
             if (isPpmFrameValid(&ppmRaw))
             {
+                ppmLast = ppmRaw;
+                ppmSeen = 1;
                 inputRaw.lateral = ppmRaw.ppmCh[0];
                 inputRaw.forward = invertPpmChannelU16(ppmRaw.ppmCh[1]);
                 inputRaw.lift = invertPpmChannelU16(ppmRaw.ppmCh[2]);
                 inputRaw.yaw = ppmRaw.ppmCh[3];
                 lastPpmTick = nowTick;
             }
+        }
+        else if (ppmSeen)
+        {
+            /* 遥控队列无新数据时沿用上一帧通道值。 */
+            ppmRaw = ppmLast;
+            inputRaw.lateral = ppmRaw.ppmCh[0];
+            inputRaw.forward = invertPpmChannelU16(ppmRaw.ppmCh[1]);
+            inputRaw.lift = invertPpmChannelU16(ppmRaw.ppmCh[2]);
+            inputRaw.yaw = ppmRaw.ppmCh[3];
         }
 
         input.lateral = lowPassChannelU16(input.lateral, inputRaw.lateral, RC_FILTER_ALPHA);
@@ -802,7 +939,7 @@ void FlightControl_Task(void* params)
                 yawTargetDeg = state.yaw;
             }
 
-            AttitudeController_Update(&g_controller, &sp, &state, false);
+            AttitudeController_Update(&g_controller, &sp, &state, false, (updateOuterLoop != 0));
             AttitudeController_MixToMotor(&g_controller, throttleCmd, &motor);
             Motor_WriteOutput(&motor);
 

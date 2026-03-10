@@ -33,7 +33,13 @@
 
 uint8_t i2c_txflag = I2C_TX_DONE;
 uint8_t i2c_rxflag = I2C_RX_DONE;
-SemaphoreHandle_t I2CSemaphore = NULL;
+
+/* ==================== I2C 双锁机制 ====================
+ * I2CMutex: 互斥锁，保护 I2C 总线独占访问（带优先级继承）
+ * I2CDoneSemaphore: 二值信号量，通知 DMA 传输完成（同步用）
+ * ================================================ */
+SemaphoreHandle_t I2CMutex = NULL;           // 互斥锁 - 用于总线互斥访问
+SemaphoreHandle_t I2CDoneSemaphore = NULL;   // 二值信号量 - 用于 DMA 完成同步
 /* USER CODE END 0 */
 
 I2C_HandleTypeDef hi2c1;
@@ -44,10 +50,19 @@ DMA_HandleTypeDef hdma_i2c1_tx;
 void MX_I2C1_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
-	I2CSemaphore = xSemaphoreCreateBinary();
-	xSemaphoreGive(I2CSemaphore);
-  /* USER CODE END I2C1_Init 0 */
+  /* USER CODE BEGIN I2C1_Init */
+	// 创建 I2C 双锁机制
+	I2CMutex = xSemaphoreCreateMutex();
+	I2CDoneSemaphore = xSemaphoreCreateBinary();
+	
+	if( (I2CMutex != NULL) && (I2CDoneSemaphore != NULL) ) {
+    // 释放二值信号量，表示可以开始第一次 DMA 传输
+		// 注意：这里释放是为了配合"先启动 DMA，再等待完成"的模式
+		// 但实际上第一次传输不需要等待这个信号量（因为是初始状态）
+		// 真正的同步信号量在 DMA 回调中释放
+		xSemaphoreGive(I2CDoneSemaphore);
+	}
+	/* USER CODE END I2C1_Init */
 
   /* USER CODE BEGIN I2C1_Init 1 */
 
@@ -180,12 +195,17 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* i2cHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+/**
+ * @brief I2C DMA 传输完成回调函数集合
+ * 所有回调函数统一释放 I2CDoneSemaphore（二值信号量）通知任务 DMA 已完成
+ */
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
     if (hi2c == &hi2c1)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(I2CSemaphore, &xHigherPriorityTaskWoken);
+        xSemaphoreGiveFromISR(I2CDoneSemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
@@ -195,7 +215,7 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
     if (hi2c == &hi2c1)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(I2CSemaphore, &xHigherPriorityTaskWoken);
+        xSemaphoreGiveFromISR(I2CDoneSemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
@@ -205,7 +225,7 @@ void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c)
     if (hi2c == &hi2c1)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(I2CSemaphore, &xHigherPriorityTaskWoken);
+        xSemaphoreGiveFromISR(I2CDoneSemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
@@ -215,7 +235,7 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
     if (hi2c == &hi2c1)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(I2CSemaphore, &xHigherPriorityTaskWoken);
+        xSemaphoreGiveFromISR(I2CDoneSemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
@@ -225,18 +245,19 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
     if (hi2c == &hi2c1)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(I2CSemaphore, &xHigherPriorityTaskWoken);
+        // 错误时也释放信号量，防止任务永久阻塞
+        xSemaphoreGiveFromISR(I2CDoneSemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
 
-// 添加DMA传输完成回调函数
+// 添加 DMA 传输完成回调函数
 void HAL_I2C_MasterTxDmaCpltCallback(I2C_HandleTypeDef *hi2c)
 {
     if (hi2c == &hi2c1)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(I2CSemaphore, &xHigherPriorityTaskWoken);
+        xSemaphoreGiveFromISR(I2CDoneSemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
@@ -246,7 +267,7 @@ void HAL_I2C_MasterRxDmaCpltCallback(I2C_HandleTypeDef *hi2c)
     if (hi2c == &hi2c1)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(I2CSemaphore, &xHigherPriorityTaskWoken);
+        xSemaphoreGiveFromISR(I2CDoneSemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
@@ -256,7 +277,7 @@ void HAL_I2C_MemTxDmaCpltCallback(I2C_HandleTypeDef *hi2c)
     if (hi2c == &hi2c1)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(I2CSemaphore, &xHigherPriorityTaskWoken);
+        xSemaphoreGiveFromISR(I2CDoneSemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
@@ -266,7 +287,7 @@ void HAL_I2C_MemRxDmaCpltCallback(I2C_HandleTypeDef *hi2c)
     if (hi2c == &hi2c1)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR(I2CSemaphore, &xHigherPriorityTaskWoken);
+        xSemaphoreGiveFromISR(I2CDoneSemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }

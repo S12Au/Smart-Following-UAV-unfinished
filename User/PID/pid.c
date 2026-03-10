@@ -31,6 +31,8 @@
 #include <float.h>
 #include "autoconf.h"
 
+#define PID_MIN_DT_SEC 1e-5f
+
 void pidInit(PidObject* pid, const float desired, const float kp,
              const float ki, const float kd, const float kff, const float dt,
              const float samplingRate, const float cutoffFreq,
@@ -47,7 +49,7 @@ void pidInit(PidObject* pid, const float desired, const float kp,
   pid->kff           = kff;
   pid->iLimit        = DEFAULT_PID_INTEGRATION_LIMIT;
   pid->outputLimit   = DEFAULT_PID_OUTPUT_LIMIT;
-  pid->dt            = dt;
+  pid->dt            = (isfinite(dt) && dt > PID_MIN_DT_SEC) ? dt : PID_MIN_DT_SEC;
   pid->enableDFilter = enableDFilter;
   if (pid->enableDFilter)
   {
@@ -62,6 +64,7 @@ float pidUpdate(PidObject* pid, const float measured, const bool isYawAngle)
   float outICandidate;              // 积分项输出候选值（用于限幅前计算）
   float outputUnsat;                // 未饱和的输出值（用于抗饱和反馈）
   bool freezeIntegral = false;      // 积分冻结标志（大误差时禁止积分累加）
+  float dt = (isfinite(pid->dt) && pid->dt > PID_MIN_DT_SEC) ? pid->dt : PID_MIN_DT_SEC;
 
   pid->error = pid->desired - measured;
   
@@ -96,12 +99,12 @@ float pidUpdate(PidObject* pid, const float measured, const bool isYawAngle)
   }
   
   #if CONFIG_CONTROLLER_PID_FILTER_ALL
-    pid->deriv = delta / pid->dt;
+    pid->deriv = delta / dt;
   #else
     if (pid->enableDFilter){
-      pid->deriv = lpf2pApply(&pid->dFilter, delta / pid->dt);
+      pid->deriv = lpf2pApply(&pid->dFilter, delta / dt);
     } else {
-      pid->deriv = delta / pid->dt;
+      pid->deriv = delta / dt;
     }
   #endif
   
@@ -114,7 +117,7 @@ float pidUpdate(PidObject* pid, const float measured, const bool isYawAngle)
   pid->outFF = pid->kff * pid->desired;
   output += pid->outFF;
 
-  integCandidate = pid->integ + pid->error * pid->dt;
+  integCandidate = pid->integ + pid->error * dt;
   if(pid->iLimit != 0)
   {
     integCandidate = constrain(integCandidate, -pid->iLimit, pid->iLimit);
@@ -220,7 +223,7 @@ void pidSetKff(PidObject* pid, const float kff)
 }
 
 void pidSetDt(PidObject* pid, const float dt) {
-    pid->dt = dt;
+  pid->dt = (isfinite(dt) && dt > PID_MIN_DT_SEC) ? dt : PID_MIN_DT_SEC;
 }
 
 void filterReset(PidObject* pid, const float samplingRate, const float cutoffFreq, bool enableDFilter) {

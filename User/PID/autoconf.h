@@ -18,6 +18,22 @@
 /* 控制器更新频率 (Hz) */
 #define CONFIG_CONTROLLER_RATE_HZ           500
 
+/* 姿态外环（角度环）更新频率 (Hz)
+ * 设计为低于内环：典型 50-200Hz。当前设置为 100Hz。 */
+#define CONFIG_OUTER_LOOP_RATE_HZ           100
+
+#if (CONFIG_OUTER_LOOP_RATE_HZ < 50) || (CONFIG_OUTER_LOOP_RATE_HZ > 200)
+#error "CONFIG_OUTER_LOOP_RATE_HZ must be in [50, 200] Hz"
+#endif
+
+#if (CONFIG_OUTER_LOOP_RATE_HZ >= CONFIG_CONTROLLER_RATE_HZ)
+#error "CONFIG_OUTER_LOOP_RATE_HZ must be lower than CONFIG_CONTROLLER_RATE_HZ"
+#endif
+
+#if ((CONFIG_CONTROLLER_RATE_HZ % CONFIG_OUTER_LOOP_RATE_HZ) != 0)
+#error "CONFIG_CONTROLLER_RATE_HZ must be an integer multiple of CONFIG_OUTER_LOOP_RATE_HZ"
+#endif
+
 /* 姿态解算更新频率 (Hz) */
 #define CONFIG_ATTITUDE_RATE_HZ             500
 

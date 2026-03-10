@@ -57,10 +57,23 @@ typedef enum
 	FLIGHT_GAIN_KD
 } FlightGainType_t;
 
+/**
+ * @brief PID参数设置错误码
+ */
+typedef enum
+{
+	FLIGHT_PID_SET_OK = 0,              // PID 参数设置成功
+	FLIGHT_PID_SET_ERR_NOT_DISARMED,    // 错误：飞行器未解锁（处于锁定状态），禁止修改 PID 参数
+	FLIGHT_PID_SET_ERR_INVALID_INPUT,   // 错误：输入参数无效（如 PID ID 超出范围、增益值非负或为 NaN）
+	FLIGHT_PID_SET_ERR_FLASH_WRITE,     // 错误：Flash 写入失败（硬件故障或校验错误）
+	FLIGHT_PID_SET_ERR_INTERNAL         // 错误：内部错误（如 PID 对象指针为空、内存访问异常）
+} FlightPidSetError_t;
+
 void FlightControl_Task(void* params);
 void FlightControl_Init(void);
 void FlightControl_GetDebugSnapshot(FlightDebugData_t* out);
 bool FlightControl_SetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, float value);
 bool FlightControl_GetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, float* outValue);
+FlightPidSetError_t FlightControl_GetLastPidSetError(void);
 
 #endif /* FLIGHT_CONTROL_H_ */
