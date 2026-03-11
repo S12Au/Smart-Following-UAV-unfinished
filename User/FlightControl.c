@@ -22,6 +22,21 @@
 #define PID_FLASH_MAGIC      0x50494431U
 #define PID_FLASH_VERSION    0x00010000U
 #define RC_FILTER_ALPHA      0.20f
+#define IMU_DROP_STAT_WINDOW_CYCLES ((uint16_t)CONFIG_CONTROLLER_RATE_HZ)
+#define IMU_CTRL_SCALE_STALE         0.40f
+#define IMU_CTRL_SCALE_PREFAILSAFE   0.15f
+
+/**
+ * @brief IMU 数据新鲜度枚举类型
+ * @note 四个新鲜度等级
+ */
+typedef enum
+{
+    IMU_FRESHNESS_FRESH = 0,
+    IMU_FRESHNESS_STALE,
+    IMU_FRESHNESS_PREFAILSAFE,
+    IMU_FRESHNESS_LOST
+} ImuFreshness_t;
 
 /**
  * @brief 飞行控制器 PID 参数持久化结构体
@@ -597,7 +612,7 @@ bool FlightControl_GetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, fl
  * @brief 飞行控制主任务
  * @param params 任务参数，当前未使用
  */
-void FlightControl_Task(void* params)
+void FlightControl_TaskImpl(void* params)
 {
     (void)params;
 
@@ -616,10 +631,16 @@ void FlightControl_Task(void* params)
     struct MAG_Data magLast = {{0, 0, 0}};
     struct Pressure_Data pressureLast = {0};
     struct PPM_Data ppmLast = {{0}};
-    uint8_t imuSeen = 0;
-    uint8_t magSeen = 0;
-    uint8_t pressureSeen = 0;
-    uint8_t ppmSeen = 0;
+    uint8_t imuSeen = 0;                /* IMU 数据是否已接收过标志（0=未接收，1=已接收） */
+    uint8_t imuNewSample = 0;           /* IMU 新数据采样标志（每次接收到新数据时置 1） */
+    uint8_t magSeen = 0;                /* 磁力计数据是否已接收过标志（0=未接收，1=已接收） */
+    uint8_t pressureSeen = 0;           /* 气压计数据是否已接收过标志（0=未接收，1=已接收） */
+    uint8_t ppmSeen = 0;                /* PPM 遥控器信号是否已接收过标志（0=未接收，1=已接收） */
+    ImuFreshness_t imuFreshness = IMU_FRESHNESS_LOST;  /* IMU 数据新鲜度状态（用于判断数据是否超时/丢失） */
+    ImuFreshness_t imuFreshnessPrev = IMU_FRESHNESS_LOST;  /* 上一周期的 IMU 新鲜度状态（用于状态变化检测） */
+    uint16_t imuStatCycles = 0;         /* IMU 数据总周期数统计（用于计算丢包率） */
+    uint16_t imuStatDrops = 0;          /* IMU 数据丢失次数统计（用于计算丢包率） */
+    float imuDropRatePct = 0.0f;        /* IMU 数据丢包率百分比（0.0~100.0%） */
     
     /* ========== 传感器数据时间戳管理（用于超时检测）========== */
     TickType_t lastPpmTick;             /* PPM 信号最后接收时间戳 */
@@ -728,10 +749,12 @@ void FlightControl_Task(void* params)
             pressureRaw = pressureLast;
         }
 
+        imuNewSample = 0;
         if (xQueueReceive(QueueGYROACCEL, &imuRaw, 0) == pdTRUE)
         {
             imuLast = imuRaw;
             imuSeen = 1;
+            imuNewSample = 1;
             lastImuTick = nowTick;
             if (g_flightState != FLIGHT_STATE_ARMED)
             {
@@ -741,6 +764,44 @@ void FlightControl_Task(void* params)
         else if (imuSeen)
         {
             imuRaw = imuLast;
+        }
+
+        if (imuSeen)
+        {
+            TickType_t imuAgeTicks = nowTick - lastImuTick;
+            if (imuAgeTicks > pdMS_TO_TICKS(CONFIG_IMU_FAILSAFE_TIMEOUT_MS))
+            {
+                imuFreshness = IMU_FRESHNESS_LOST;
+            }
+            else if (imuAgeTicks > pdMS_TO_TICKS(CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS))
+            {
+                imuFreshness = IMU_FRESHNESS_PREFAILSAFE;
+            }
+            else if (imuAgeTicks > pdMS_TO_TICKS(CONFIG_IMU_STALE_TIMEOUT_MS))
+            {
+                imuFreshness = IMU_FRESHNESS_STALE;
+            }
+            else
+            {
+                imuFreshness = IMU_FRESHNESS_FRESH;
+            }
+
+            imuStatCycles++;
+            if (!imuNewSample)
+            {
+                imuStatDrops++;
+            }
+
+            if (imuStatCycles >= IMU_DROP_STAT_WINDOW_CYCLES)
+            {
+                imuDropRatePct = ((float)imuStatDrops * 100.0f) / (float)imuStatCycles;
+                imuStatCycles = 0;
+                imuStatDrops = 0;
+            }
+        }
+        else
+        {
+            imuFreshness = IMU_FRESHNESS_LOST;
         }
 
         if (imuSeen)
@@ -765,16 +826,26 @@ void FlightControl_Task(void* params)
                 }
             }
 
-            AttitudeEstimator_Update(&g_estimator, &sensor);
+            if (imuFreshness == IMU_FRESHNESS_FRESH)
+            {
+                AttitudeEstimator_Update(&g_estimator, &sensor);
 
-            const EulerAngle_t* e = AttitudeEstimator_GetEuler(&g_estimator);
+                const EulerAngle_t* e = AttitudeEstimator_GetEuler(&g_estimator);
 
-            state.roll = e->roll;
-            state.pitch = e->pitch;
-            state.yaw = e->yaw;
-            state.rollRate = (float)gyroCorrected[0] / 16.4f;
-            state.pitchRate = (float)gyroCorrected[1] / 16.4f;
-            state.yawRate = (float)gyroCorrected[2] / 16.4f;
+                state.roll = e->roll;
+                state.pitch = e->pitch;
+                state.yaw = e->yaw;
+                state.rollRate = (float)gyroCorrected[0] / 16.4f;
+                state.pitchRate = (float)gyroCorrected[1] / 16.4f;
+                state.yawRate = (float)gyroCorrected[2] / 16.4f;
+            }
+            else
+            {
+                /* IMU 数据陈旧时冻结姿态并清零角速度反馈，避免重复积分旧样本。 */
+                state.rollRate = 0.0f;
+                state.pitchRate = 0.0f;
+                state.yawRate = 0.0f;
+            }
         }
 
         if (magValid && ((nowTick - lastMagTick) > pdMS_TO_TICKS(CONFIG_MAG_STALE_TIMEOUT_MS)))
@@ -896,6 +967,7 @@ void FlightControl_Task(void* params)
             float yawErr;                   /*偏航误差*/
             float liftStick;                /*升力输入的归一化后的值*/
             float altitudeOut = 0.0f;       /*高度输出*/
+            float imuCtrlScale = 1.0f;
 
             AttitudeController_GenerateSetpoint(&input, &sp);
 
@@ -939,6 +1011,28 @@ void FlightControl_Task(void* params)
                 yawTargetDeg = state.yaw;
             }
 
+            if (imuFreshness == IMU_FRESHNESS_STALE)
+            {
+                imuCtrlScale = IMU_CTRL_SCALE_STALE;
+            }
+            else if (imuFreshness == IMU_FRESHNESS_PREFAILSAFE)
+            {
+                imuCtrlScale = IMU_CTRL_SCALE_PREFAILSAFE;
+                throttleCmd = (uint16_t)constrain((float)throttleCmd,
+                                                  (float)CONFIG_MOTOR_IDLE_THROTTLE,
+                                                  (float)(CONFIG_MOTOR_IDLE_THROTTLE + 80));
+            }
+
+            if ((imuFreshness != IMU_FRESHNESS_FRESH) && (imuFreshnessPrev == IMU_FRESHNESS_FRESH))
+            {
+                /* 进入 IMU 降级状态时重置控制器积分，避免旧误差累计导致突变。 */
+                AttitudeController_Reset(&g_controller, &state);
+            }
+
+            sp.roll *= imuCtrlScale;
+            sp.pitch *= imuCtrlScale;
+            sp.yawRate *= imuCtrlScale;
+
             AttitudeController_Update(&g_controller, &sp, &state, false, (updateOuterLoop != 0));
             AttitudeController_MixToMotor(&g_controller, throttleCmd, &motor);
             Motor_WriteOutput(&motor);
@@ -958,10 +1052,14 @@ void FlightControl_Task(void* params)
         g_debug.state = g_flightState;
         g_debug.linkAlive = ((nowTick - lastPpmTick) <= pdMS_TO_TICKS(CONFIG_PPM_FAILSAFE_TIMEOUT_MS)) ? 1u : 0u;
         g_debug.sensorCalibrated = g_biasReady;
+        g_debug.imuFreshness = (uint8_t)imuFreshness;
+        g_debug.imuDropRatePct = imuDropRatePct;
         g_debug.roll = state.roll;
         g_debug.pitch = state.pitch;
         g_debug.yaw = state.yaw;
         g_debug.throttle = throttleCmd;
+
+        imuFreshnessPrev = imuFreshness;
 
         vTaskDelayUntil(&xLastWakeTime, xPeriod);
     }

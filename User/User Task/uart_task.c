@@ -346,16 +346,18 @@ void Uart_Send_Task()
 
 	uart1RxStartIT();
 
-	printf("FC,st,lk,cal,thr,r,p,y,rSp,pSp,ySp,rOut,pOut,yOut,m1,m2,m3,m4\r\n");
+	printf("FC,st,lk,cal,imuFresh,imuDrop%%,thr,r,p,y,rSp,pSp,ySp,rOut,pOut,yOut,m1,m2,m3,m4\r\n");
 	while(1)
 	{
 		processUartRx();
 
 		FlightControl_GetDebugSnapshot(&dbg);
-		printf("FC,%d,%u,%u,%u,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%u,%u,%u,%u\r\n",
+		printf("FC,%d,%u,%u,%u,%.2f,%u,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%u,%u,%u,%u\r\n",
 				(int)dbg.state,
 				dbg.linkAlive,
 				dbg.sensorCalibrated,
+				dbg.imuFreshness,
+				dbg.imuDropRatePct,
 				dbg.throttle,
 				dbg.roll,
 				dbg.pitch,

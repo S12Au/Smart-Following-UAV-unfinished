@@ -50,19 +50,9 @@ DMA_HandleTypeDef hdma_i2c1_tx;
 void MX_I2C1_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init */
-	// 创建 I2C 双锁机制
-	I2CMutex = xSemaphoreCreateMutex();
-	I2CDoneSemaphore = xSemaphoreCreateBinary();
-	
-	if( (I2CMutex != NULL) && (I2CDoneSemaphore != NULL) ) {
-    // 释放二值信号量，表示可以开始第一次 DMA 传输
-		// 注意：这里释放是为了配合"先启动 DMA，再等待完成"的模式
-		// 但实际上第一次传输不需要等待这个信号量（因为是初始状态）
-		// 真正的同步信号量在 DMA 回调中释放
-		xSemaphoreGive(I2CDoneSemaphore);
-	}
-	/* USER CODE END I2C1_Init */
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
 
   /* USER CODE BEGIN I2C1_Init 1 */
 

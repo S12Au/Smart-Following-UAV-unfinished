@@ -336,7 +336,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F401xE</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include;../User;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../User/UserTask;..\User\PID;..\User\User Task</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include;../User;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../User/UserTask;../User/PID;..\User\User Task</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -444,6 +444,81 @@
               <FileName>getPPM_task.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\User\User Task\getPPM_task.h</FilePath>
+            </File>
+            <File>
+              <FileName>flightcontrol_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\User Task\flightcontrol_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>flightcontrol_task.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\User Task\flightcontrol_task.h</FilePath>
+            </File>
+            <File>
+              <FileName>AttitudeControl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\AttitudeControl.c</FilePath>
+            </File>
+            <File>
+              <FileName>AttitudeControl.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\AttitudeControl.h</FilePath>
+            </File>
+            <File>
+              <FileName>AttitudeEstimator.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\AttitudeEstimator.c</FilePath>
+            </File>
+            <File>
+              <FileName>AttitudeEstimator.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\AttitudeEstimator.h</FilePath>
+            </File>
+            <File>
+              <FileName>FlightControl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\FlightControl.c</FilePath>
+            </File>
+            <File>
+              <FileName>FlightControl.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\FlightControl.h</FilePath>
+            </File>
+            <File>
+              <FileName>autoconf.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\PID\autoconf.h</FilePath>
+            </File>
+            <File>
+              <FileName>filter.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\PID\filter.c</FilePath>
+            </File>
+            <File>
+              <FileName>filter.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\PID\filter.h</FilePath>
+            </File>
+            <File>
+              <FileName>num.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\PID\num.h</FilePath>
+            </File>
+            <File>
+              <FileName>physicalConstants.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\PID\physicalConstants.h</FilePath>
+            </File>
+            <File>
+              <FileName>pid.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\PID\pid.c</FilePath>
+            </File>
+            <File>
+              <FileName>pid.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\PID\pid.h</FilePath>
             </File>
             <File>
               <FileName>main.c</FileName>
@@ -744,71 +819,6 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
-            </File>
-            <File>
-              <FileName>AttitudeControl.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\User\AttitudeControl.c</FilePath>
-            </File>
-            <File>
-              <FileName>AttitudeControl.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\User\AttitudeControl.h</FilePath>
-            </File>
-            <File>
-              <FileName>AttitudeEstimator.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\User\AttitudeEstimator.c</FilePath>
-            </File>
-            <File>
-              <FileName>AttitudeEstimator.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\User\AttitudeEstimator.h</FilePath>
-            </File>
-            <File>
-              <FileName>FlightControl.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\User\FlightControl.c</FilePath>
-            </File>
-            <File>
-              <FileName>FlightControl.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\User\FlightControl.h</FilePath>
-            </File>
-            <File>
-              <FileName>autoconf.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\User\PID\autoconf.h</FilePath>
-            </File>
-            <File>
-              <FileName>filter.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\User\PID\filter.c</FilePath>
-            </File>
-            <File>
-              <FileName>filter.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\User\PID\filter.h</FilePath>
-            </File>
-            <File>
-              <FileName>num.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\User\PID\num.h</FilePath>
-            </File>
-            <File>
-              <FileName>physicalConstants.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\User\PID\physicalConstants.h</FilePath>
-            </File>
-            <File>
-              <FileName>pid.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\User\PID\pid.c</FilePath>
-            </File>
-            <File>
-              <FileName>pid.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\User\PID\pid.h</FilePath>
             </File>
           </Files>
         </Group>

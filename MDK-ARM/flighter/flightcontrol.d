@@ -17,11 +17,11 @@ flighter\flightcontrol.o: ..\User\GY86.h
 flighter\flightcontrol.o: ..\User\User Task\getPPM_task.h
 flighter\flightcontrol.o: ..\User\AttitudeEstimator.h
 flighter\flightcontrol.o: ..\User\AttitudeControl.h
-flighter\flightcontrol.o: ..\User\PID\pid.h
-flighter\flightcontrol.o: ..\User\PID\filter.h
+flighter\flightcontrol.o: ../User/PID/pid.h
+flighter\flightcontrol.o: ../User/PID/filter.h
 flighter\flightcontrol.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
-flighter\flightcontrol.o: ..\User\PID\autoconf.h
-flighter\flightcontrol.o: ..\User\PID\physicalConstants.h
+flighter\flightcontrol.o: ../User/PID/autoconf.h
+flighter\flightcontrol.o: ../User/PID/physicalConstants.h
 flighter\flightcontrol.o: ../Core/Inc/tim.h
 flighter\flightcontrol.o: ../Core/Inc/main.h
 flighter\flightcontrol.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h
@@ -55,5 +55,5 @@ flighter\flightcontrol.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_
 flighter\flightcontrol.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h
 flighter\flightcontrol.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h
 flighter\flightcontrol.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h
-flighter\flightcontrol.o: ..\User\PID\num.h
+flighter\flightcontrol.o: ../User/PID/num.h
 flighter\flightcontrol.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h

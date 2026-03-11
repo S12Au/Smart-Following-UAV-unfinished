@@ -77,6 +77,8 @@
 /* 安全逻辑超时时间（单位：毫秒）*/
 #define CONFIG_PPM_FAILSAFE_TIMEOUT_MS      300   // 遥控器信号丢失保护超时
 #define CONFIG_IMU_FAILSAFE_TIMEOUT_MS      20    // IMU 数据失效超时
+#define CONFIG_IMU_STALE_TIMEOUT_MS         4     // IMU 轻度陈旧阈值（进入降级控制）
+#define CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS   10    // IMU 重度陈旧阈值（进入预保护）
 #define CONFIG_MAG_STALE_TIMEOUT_MS         500   // 磁力计数据过期超时
 #define CONFIG_PRESSURE_STALE_TIMEOUT_MS    500   // 气压计数据过期超时
 #define CONFIG_ARM_HOLD_MS                  1000  // 解锁命令保持时间
@@ -91,5 +93,13 @@
 #define CONFIG_SENSOR_CALIB_SAMPLES         1000  // 校准采样点数
 #define CONFIG_GYRO_STILL_THRESHOLD_DPS     3.0f  // 陀螺仪静止判断阈值（度/秒）
 #define CONFIG_ACCEL_STILL_TOL_G            0.15f // 加速度计静止容差（g）
+
+#if (CONFIG_IMU_STALE_TIMEOUT_MS >= CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS)
+#error "CONFIG_IMU_STALE_TIMEOUT_MS must be lower than CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS"
+#endif
+
+#if (CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS >= CONFIG_IMU_FAILSAFE_TIMEOUT_MS)
+#error "CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS must be lower than CONFIG_IMU_FAILSAFE_TIMEOUT_MS"
+#endif
 
 #endif /* AUTOCONF_H_ */

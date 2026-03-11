@@ -19,6 +19,8 @@ typedef struct
 	FlightState_t state;
 	uint8_t linkAlive;
 	uint8_t sensorCalibrated;
+	uint8_t imuFreshness;    /* IMU 新鲜度状态：0=FRESH,1=STALE,2=PREFAILSAFE,3=LOST */
+	float imuDropRatePct;    /* IMU 丢帧率（百分比，滑动统计窗口） */
 
 	float roll;
 	float pitch;

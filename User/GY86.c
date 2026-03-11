@@ -767,7 +767,7 @@ void Get_GYROandACCEL()
 	{
 		MPU6050_Read_GYRO(idata.gyro);
 		MPU6050_Read_ACCEL(idata.accel);
-		xQueueSend(QueueGYROACCEL,&idata,0);
+		xQueueOverwrite(QueueGYROACCEL, &idata);
 		vTaskDelayUntil(&xLastWakeTime, xPeriod);		//固定延时到上一次读取结束的2ms以后
 	}
 }
@@ -784,7 +784,7 @@ void Get_Pressure()
 	{
 		//idata.pressure = MS5611_Read_Pressure();
 		idata.pressure = BMP180_read_pressure();
-		xQueueSend(QueuePressure,&idata,0);
+		xQueueOverwrite(QueuePressure, &idata);
 		vTaskDelayUntil(&xLastWakeTime, xPeriod);
 	}
 }
@@ -800,7 +800,7 @@ void Get_MAG()
 	while(1)
 	{
 		HMC5883L_Read_MAG(idata.mag);		
-		xQueueSend(QueueMAG,&idata,0);
+		xQueueOverwrite(QueueMAG, &idata);
 		vTaskDelayUntil(&xLastWakeTime, xPeriod);
 	}
 }

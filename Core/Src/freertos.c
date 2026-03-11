@@ -34,7 +34,7 @@
 #include "i2c.h"
 #include "uart_task.h"
 #include "getPPM_task.h"
-#include "FlightControl.h"
+#include "flightcontrol_task.h"
 #include <string.h>
 /* USER CODE END Includes */
 
@@ -89,9 +89,9 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
-	QueueGYROACCEL = xQueueCreate(10, sizeof(struct GYRO_ACCEL_Data));
-	QueueMAG = xQueueCreate(10, sizeof(struct MAG_Data));
-	QueuePressure = xQueueCreate(10, sizeof(struct Pressure_Data));
+  QueueGYROACCEL = xQueueCreate(1, sizeof(struct GYRO_ACCEL_Data));
+  QueueMAG = xQueueCreate(1, sizeof(struct MAG_Data));
+  QueuePressure = xQueueCreate(1, sizeof(struct Pressure_Data));
 	QueuePPM = xQueueCreate(10, sizeof(struct PPM_Data));
   /* USER CODE END Init */
 
