@@ -49,6 +49,12 @@
 #define CONFIG_MOTOR_MAX_THROTTLE           2000  // 电机最大油门 PWM 脉宽
 #define CONFIG_MOTOR_IDLE_THROTTLE          1100  // 电机怠速 PWM 脉宽（启动后维持转速）
 
+/* 云台调试模式
+ * 1: 启用调试保护，限制总油门和最终电机输出，并关闭定高模式
+ * 0: 恢复正常飞行逻辑 */
+#define CONFIG_GIMBAL_DEBUG_MODE            1
+#define CONFIG_GIMBAL_DEBUG_MAX_THROTTLE    1180
+
 /* 遥控器油门死区（单位：us）*/
 #define CONFIG_THROTTLE_MIN                 1050  // 遥控器油门杆最小有效值
 #define CONFIG_THROTTLE_MAX                 1950  // 遥控器油门杆最大有效值
@@ -100,6 +106,11 @@
 
 #if (CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS >= CONFIG_IMU_FAILSAFE_TIMEOUT_MS)
 #error "CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS must be lower than CONFIG_IMU_FAILSAFE_TIMEOUT_MS"
+#endif
+
+#if (CONFIG_GIMBAL_DEBUG_MAX_THROTTLE < CONFIG_MOTOR_IDLE_THROTTLE) || \
+	(CONFIG_GIMBAL_DEBUG_MAX_THROTTLE > CONFIG_MOTOR_MAX_THROTTLE)
+#error "CONFIG_GIMBAL_DEBUG_MAX_THROTTLE must be within [CONFIG_MOTOR_IDLE_THROTTLE, CONFIG_MOTOR_MAX_THROTTLE]"
 #endif
 
 #endif /* AUTOCONF_H_ */

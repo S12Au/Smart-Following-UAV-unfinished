@@ -121,6 +121,50 @@ static uint16_t invertPpmChannelU16(uint16_t input)
     return (uint16_t)(CONFIG_PPM_MIN_VALID + CONFIG_PPM_MAX_VALID - constrained);
 }
 
+/**
+ * @brief 调试模式下油门限幅
+ * @param throttle 输入的油门值
+ */
+static uint16_t clampThrottleForDebug(uint16_t throttle)
+{
+#if CONFIG_GIMBAL_DEBUG_MODE
+    return (uint16_t)constrain((float)throttle,
+                               (float)CONFIG_MOTOR_MIN_THROTTLE,
+                               (float)CONFIG_GIMBAL_DEBUG_MAX_THROTTLE);
+#else
+    return throttle;
+#endif
+}
+
+/**
+ * @brief 调试模式下电机输出限幅
+ * @param motor 输入的电机输出结构体指针
+ */
+static void clampMotorOutputForDebug(MotorOutput_t* motor)
+{
+#if CONFIG_GIMBAL_DEBUG_MODE
+    if (motor == 0)
+    {
+        return;
+    }
+
+    motor->m1 = (uint16_t)constrain((float)motor->m1,
+                                    (float)CONFIG_MOTOR_MIN_THROTTLE,
+                                    (float)CONFIG_GIMBAL_DEBUG_MAX_THROTTLE);
+    motor->m2 = (uint16_t)constrain((float)motor->m2,
+                                    (float)CONFIG_MOTOR_MIN_THROTTLE,
+                                    (float)CONFIG_GIMBAL_DEBUG_MAX_THROTTLE);
+    motor->m3 = (uint16_t)constrain((float)motor->m3,
+                                    (float)CONFIG_MOTOR_MIN_THROTTLE,
+                                    (float)CONFIG_GIMBAL_DEBUG_MAX_THROTTLE);
+    motor->m4 = (uint16_t)constrain((float)motor->m4,
+                                    (float)CONFIG_MOTOR_MIN_THROTTLE,
+                                    (float)CONFIG_GIMBAL_DEBUG_MAX_THROTTLE);
+#else
+    (void)motor;
+#endif
+}
+
 /** 
  * @brief 根据 PID ID 获取对应的 PID 对象
  * @param pidId PID ID
@@ -976,7 +1020,7 @@ void FlightControl_TaskImpl(void* params)
 
             throttleCmd = input.lift;
 
-            if (pressureValid && g_baroRefReady)
+            if (!CONFIG_GIMBAL_DEBUG_MODE && pressureValid && g_baroRefReady)
             {
                 if (fabsf(liftStick) < 0.08f)
                 {
@@ -1000,6 +1044,14 @@ void FlightControl_TaskImpl(void* params)
                     pidReset(&g_altitudePid, altitudeM);
                 }
             }
+            else
+            {
+                g_altHoldActive = 0;
+                g_altitudeSp = altitudeM;
+                pidReset(&g_altitudePid, altitudeM);
+            }
+
+            throttleCmd = clampThrottleForDebug(throttleCmd);
 
             if (fabsf(yawStick) < 0.05f)
             {
@@ -1035,6 +1087,7 @@ void FlightControl_TaskImpl(void* params)
 
             AttitudeController_Update(&g_controller, &sp, &state, false, (updateOuterLoop != 0));
             AttitudeController_MixToMotor(&g_controller, throttleCmd, &motor);
+            clampMotorOutputForDebug(&motor);
             Motor_WriteOutput(&motor);
 
             g_debug.rollSp = sp.roll;
