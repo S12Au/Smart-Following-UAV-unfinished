@@ -50,6 +50,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart)
 	}
 }
 
+/**
+ * @brief 比较两个字符串是否相等，比较时忽略大小写
+ * @param a 字符串 a
+ * @param b 字符串 b
+ * @return 1 表示相等，0 表示不相等
+ */
 static int tokenEquals(const char* a, const char* b)
 {
 	if (a == 0 || b == 0)
@@ -287,7 +293,7 @@ static void handleUartCommand(char* line)
 
 /**
  * @brief 处理 UART 接收数据，解析命令并执行相应操作
- * @note 该函数会被主任务循环调用，以处理 UART 接
+ * @note 该函数会被主任务循环调用，以处理 UART 接口
  */
 static void processUartRx(void)
 {
@@ -339,19 +345,20 @@ static void processUartRx(void)
 }
 
 void Uart_Send_Task()
-{
+{	
 	FlightDebugData_t dbg;
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 	const TickType_t xPeriod = pdMS_TO_TICKS(1000 / CONFIG_UART_DEBUG_RATE_HZ);
 
 	uart1RxStartIT();
 
-	printf("FC,st,lk,cal,imuFresh,imuDrop%%,thr,r,p,y,rSp,pSp,ySp,rOut,pOut,yOut,m1,m2,m3,m4\r\n");
+	//printf("FC,st,lk,cal,imuFresh,imuDrop%%,thr,r,p,y,rSp,pSp,ySp,rOut,pOut,yOut,m1,m2,m3,m4\r\n");
 	while(1)
 	{
-		processUartRx();
+		//processUartRx();
 
-		FlightControl_GetDebugSnapshot(&dbg);
+		//FlightControl_GetDebugSnapshot(&dbg);
+		/*
 		printf("FC,%d,%u,%u,%u,%.2f,%u,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%u,%u,%u,%u\r\n",
 				(int)dbg.state,
 				dbg.linkAlive,
@@ -371,11 +378,14 @@ void Uart_Send_Task()
 				dbg.m1,
 				dbg.m2,
 				dbg.m3,
-				dbg.m4);
+				dbg.m4);*/
 
-		vTaskDelayUntil(&xLastWakeTime, xPeriod);
-	
+		
+		//vTaskDelayUntil(&xLastWakeTime, xPeriod);
+		printf("123我是\r\n");
+		vTaskDelay(500);
 	}
+	
 	/*
 	struct GYRO_ACCEL_Data GYRO_ACCEL_Rdata;
 	struct MAG_Data MAG_Rdata;
@@ -412,6 +422,6 @@ void Uart_Send_Task()
 
 		vTaskDelay(5);
 	
-	}
-	*/
+	}*/
+	
 }

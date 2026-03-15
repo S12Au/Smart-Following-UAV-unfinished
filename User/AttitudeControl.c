@@ -241,9 +241,10 @@ void Motor_WriteOutput(const MotorOutput_t* motor)
     {
         return;
     }
-
-    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_1, motor->m1);
-    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_2, motor->m2);
+    
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_2, motor->m1);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_1, motor->m2);
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_3, motor->m3);
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_4, motor->m4);
+    
 }

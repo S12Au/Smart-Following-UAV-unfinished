@@ -53,7 +53,8 @@
  * 1: 启用调试保护，限制总油门和最终电机输出，并关闭定高模式
  * 0: 恢复正常飞行逻辑 */
 #define CONFIG_GIMBAL_DEBUG_MODE            1
-#define CONFIG_GIMBAL_DEBUG_MAX_THROTTLE    1180
+#define CONFIG_GIMBAL_DEBUG_MAX_THROTTLE    1280
+#define CONFIG_GIMBAL_DEBUG_MAX_TILT_ANGLE  15.0f
 
 /* 遥控器油门死区（单位：us）*/
 #define CONFIG_THROTTLE_MIN                 1050  // 遥控器油门杆最小有效值
@@ -87,17 +88,17 @@
 #define CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS   10    // IMU 重度陈旧阈值（进入预保护）
 #define CONFIG_MAG_STALE_TIMEOUT_MS         500   // 磁力计数据过期超时
 #define CONFIG_PRESSURE_STALE_TIMEOUT_MS    500   // 气压计数据过期超时
-#define CONFIG_ARM_HOLD_MS                  1000  // 解锁命令保持时间
-#define CONFIG_DISARM_HOLD_MS               600   // 上锁命令保持时间
-#define CONFIG_ARM_YAW_HIGH                 1900  // 解锁时油门杆高位阈值
-#define CONFIG_DISARM_YAW_LOW               1100  // 上锁时油门杆低位阈值
+#define CONFIG_ARM_HOLD_MS                  2000  // 解锁命令保持时间
+#define CONFIG_DISARM_HOLD_MS               1500   // 上锁命令保持时间
+#define CONFIG_ARM_YAW_HIGH                 1900  // 解锁时偏航杆高位阈值
+#define CONFIG_DISARM_YAW_LOW               1100  // 上锁时偏航杆低位阈值
 
 /* 串口调试输出频率（单位：Hz）*/
 #define CONFIG_UART_DEBUG_RATE_HZ           20    // 调试数据串口发送频率
 
 /* 传感器零偏校准参数 */
 #define CONFIG_SENSOR_CALIB_SAMPLES         1000  // 校准采样点数
-#define CONFIG_GYRO_STILL_THRESHOLD_DPS     3.0f  // 陀螺仪静止判断阈值（度/秒）
+#define CONFIG_GYRO_STILL_THRESHOLD_DPS     12.0f  // 陀螺仪静止判断阈值（度/秒）
 #define CONFIG_ACCEL_STILL_TOL_G            0.15f // 加速度计静止容差（g）
 
 #if (CONFIG_IMU_STALE_TIMEOUT_MS >= CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS)
@@ -112,5 +113,11 @@
 	(CONFIG_GIMBAL_DEBUG_MAX_THROTTLE > CONFIG_MOTOR_MAX_THROTTLE)
 #error "CONFIG_GIMBAL_DEBUG_MAX_THROTTLE must be within [CONFIG_MOTOR_IDLE_THROTTLE, CONFIG_MOTOR_MAX_THROTTLE]"
 #endif
+
+/* 注意：预处理器 #if 仅支持整型常量表达式，浮点范围检查需在 C 代码中执行。 */
+#define CONFIG_GIMBAL_DEBUG_TILT_ANGLE_VALID(tilt_deg) \
+    (((tilt_deg) > 0.0f) && \
+     ((tilt_deg) <= CONFIG_MAX_ROLL_ANGLE) && \
+     ((tilt_deg) <= CONFIG_MAX_PITCH_ANGLE))
 
 #endif /* AUTOCONF_H_ */

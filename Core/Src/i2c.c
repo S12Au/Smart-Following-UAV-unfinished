@@ -71,6 +71,24 @@ void MX_I2C1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN I2C1_Init 2 */
+  /* I2C DMA 同步对象：必须在首次 I2C 访问前创建。 */
+  if (I2CMutex == NULL)
+  {
+    I2CMutex = xSemaphoreCreateMutex();
+    if (I2CMutex == NULL)
+    {
+      Error_Handler();
+    }
+  }
+
+  if (I2CDoneSemaphore == NULL)
+  {
+    I2CDoneSemaphore = xSemaphoreCreateBinary();
+    if (I2CDoneSemaphore == NULL)
+    {
+      Error_Handler();
+    }
+  }
 
   /* USER CODE END I2C1_Init 2 */
 

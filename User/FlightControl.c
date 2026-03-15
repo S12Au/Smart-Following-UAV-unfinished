@@ -62,6 +62,9 @@ static float g_altitudeSp = 0.0f;          // 目标设定点高度（米，定�
 static uint8_t g_altHoldActive = 0;        // 定高模式激活标志（1=激活，0=关闭）
 static float g_baroRefPressurePa = SEA_LEVEL_PRESSURE;  // 参考气压值（起飞点气压，用于计算相对高度）
 static uint8_t g_baroRefReady = 0;         // 参考气压就绪标志（1=已校准，0=未校准）
+#if CONFIG_GIMBAL_DEBUG_MODE
+static float g_debugTiltAngleLimitDeg = 0.0f;
+#endif
 
 /* ========== IMU 零偏校准参数 ========== */
 static int32_t g_gyroBiasRaw[3] = {0, 0, 0};  // 陀螺仪零偏校正值（LSB，三轴）
@@ -462,7 +465,7 @@ static void resetCalibrationAccumulator(void)
  * @param imu 指向GYRO_ACCEL_Data结构体的指针，包含陀螺仪和加速度计的原始数据
  */
 static void runBiasCalibrationStep(const struct GYRO_ACCEL_Data* imu)
-{
+{    
     if (g_biasReady)
     {
         return;
@@ -497,6 +500,20 @@ static void runBiasCalibrationStep(const struct GYRO_ACCEL_Data* imu)
     }
 }
 
+void Motor_Init(void)
+{
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_1, CONFIG_MOTOR_MAX_THROTTLE);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_2, CONFIG_MOTOR_MAX_THROTTLE);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_3, CONFIG_MOTOR_MAX_THROTTLE);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_4, CONFIG_MOTOR_MAX_THROTTLE);
+    vTaskDelay(2500);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_1, CONFIG_MOTOR_MIN_THROTTLE);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_2, CONFIG_MOTOR_MIN_THROTTLE);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_3, CONFIG_MOTOR_MIN_THROTTLE);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_4, CONFIG_MOTOR_MIN_THROTTLE);
+    vTaskDelay(2500);
+}
+
 void FlightControl_Init(void)
 {
     const float dt = 1.0f / (float)CONFIG_CONTROLLER_RATE_HZ;
@@ -513,12 +530,15 @@ void FlightControl_Init(void)
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
 
+    Motor_Init();
+
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_1, CONFIG_MOTOR_MIN_THROTTLE);
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_2, CONFIG_MOTOR_MIN_THROTTLE);
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_3, CONFIG_MOTOR_MIN_THROTTLE);
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_4, CONFIG_MOTOR_MIN_THROTTLE);
 
     g_flightState = FLIGHT_STATE_DISARMED;
+    printf("[FC][STATE] -> DISARMED, reason=init\r\n");
     g_biasReady = 0;
     g_gyroBiasRaw[0] = 0;
     g_gyroBiasRaw[1] = 0;
@@ -530,6 +550,15 @@ void FlightControl_Init(void)
     g_altHoldActive = 0;
     g_baroRefPressurePa = SEA_LEVEL_PRESSURE;
     g_baroRefReady = 0;
+
+#if CONFIG_GIMBAL_DEBUG_MODE
+    {
+        float maxSafeTilt = (CONFIG_MAX_ROLL_ANGLE < CONFIG_MAX_PITCH_ANGLE) ?
+                            CONFIG_MAX_ROLL_ANGLE : CONFIG_MAX_PITCH_ANGLE;
+        g_debugTiltAngleLimitDeg = CONFIG_GIMBAL_DEBUG_TILT_ANGLE_VALID(CONFIG_GIMBAL_DEBUG_MAX_TILT_ANGLE) ?
+                                   CONFIG_GIMBAL_DEBUG_MAX_TILT_ANGLE : maxSafeTilt;
+    }
+#endif
 
     (void)loadPidParamsFromFlash();
     resetCalibrationAccumulator();
@@ -736,9 +765,9 @@ void FlightControl_TaskImpl(void* params)
     input.armed = false;
 
     inputRaw = input;
-
+	
     for (;;)
-    {
+    {		
         nowTick = xTaskGetTickCount();
         updateOuterLoop = (outerLoopCounter == 0u) ? 1u : 0u;
         outerLoopCounter++;
@@ -748,7 +777,7 @@ void FlightControl_TaskImpl(void* params)
         }
 
         if (xQueueReceive(QueueMAG, &magRaw, 0) == pdTRUE)
-        {
+        {            
             magLast = magRaw;
             magSeen = 1;
             latestMagRaw[0] = magRaw.mag[0];
@@ -765,7 +794,7 @@ void FlightControl_TaskImpl(void* params)
             latestMagRaw[1] = magRaw.mag[1];
             latestMagRaw[2] = magRaw.mag[2];
         }
-
+        
         if (xQueueReceive(QueuePressure, &pressureRaw, 0) == pdTRUE)
         {
             pressureLast = pressureRaw;
@@ -905,7 +934,7 @@ void FlightControl_TaskImpl(void* params)
         }
 
         if (xQueueReceive(QueuePPM, &ppmRaw, 0) == pdTRUE)
-        {
+        {            
             if (isPpmFrameValid(&ppmRaw))
             {
                 ppmLast = ppmRaw;
@@ -932,16 +961,37 @@ void FlightControl_TaskImpl(void* params)
         input.lift = lowPassChannelU16(input.lift, inputRaw.lift, RC_FILTER_ALPHA);
         input.yaw = lowPassChannelU16(input.yaw, inputRaw.yaw, RC_FILTER_ALPHA);
 
-        if (((nowTick - lastPpmTick) > pdMS_TO_TICKS(CONFIG_PPM_FAILSAFE_TIMEOUT_MS)) ||
-            ((g_flightState == FLIGHT_STATE_ARMED) &&
-             ((nowTick - lastImuTick) > pdMS_TO_TICKS(CONFIG_IMU_FAILSAFE_TIMEOUT_MS))))
         {
-            g_flightState = FLIGHT_STATE_FAILSAFE;
+            uint8_t ppmTimedOut = ((nowTick - lastPpmTick) > pdMS_TO_TICKS(CONFIG_PPM_FAILSAFE_TIMEOUT_MS)) ? 1u : 0u;
+            uint8_t imuTimedOut = ((g_flightState == FLIGHT_STATE_ARMED) &&
+                                   ((nowTick - lastImuTick) > pdMS_TO_TICKS(CONFIG_IMU_FAILSAFE_TIMEOUT_MS))) ? 1u : 0u;
+
+            if (ppmTimedOut || imuTimedOut)
+            {
+                if (g_flightState != FLIGHT_STATE_FAILSAFE)
+                {
+                    printf("[FC][STATE] -> FAILSAFE, reason=%s%s, ppmAge=%lu, imuAge=%lu\r\n",
+                           ppmTimedOut ? "PPM_TIMEOUT" : "",
+                           imuTimedOut ? (ppmTimedOut ? "+IMU_TIMEOUT" : "IMU_TIMEOUT") : "",
+                           (unsigned long)(nowTick - lastPpmTick),
+                           (unsigned long)(nowTick - lastImuTick));
+                }
+                g_flightState = FLIGHT_STATE_FAILSAFE;
+            }
+            else if (g_flightState == FLIGHT_STATE_FAILSAFE)
+            {
+                g_flightState = FLIGHT_STATE_DISARMED;
+                printf("[FC][STATE] -> DISARMED, reason=RECOVER_FROM_FAILSAFE\r\n");
+            }
         }
-        else if (g_flightState == FLIGHT_STATE_FAILSAFE)
-        {
-            g_flightState = FLIGHT_STATE_DISARMED;
+/*
+        if (g_flightState == FLIGHT_STATE_DISARMED){
+            printf("%d  %d\r\n", inputRaw.lift, inputRaw.yaw);
         }
+        else if (g_flightState == FLIGHT_STATE_ARMED)
+        { 
+            printf("yes\r\n");
+        }*/
 
         if (inputRaw.lift <= CONFIG_THROTTLE_MIN)
         {
@@ -956,6 +1006,7 @@ void FlightControl_TaskImpl(void* params)
                          (nowTick - armCmdStartTick >= pdMS_TO_TICKS(CONFIG_ARM_HOLD_MS)))
                 {
                     g_flightState = FLIGHT_STATE_ARMED;
+                    printf("unlock\r\n");
                     AttitudeController_Reset(&g_controller, &state);
                 }
             }
@@ -974,6 +1025,10 @@ void FlightControl_TaskImpl(void* params)
                          (nowTick - disarmCmdStartTick >= pdMS_TO_TICKS(CONFIG_DISARM_HOLD_MS)))
                 {
                     g_flightState = FLIGHT_STATE_DISARMED;
+                    printf("[FC][STATE] -> DISARMED, reason=RC_DISARM_CMD, lift=%u, yaw=%u, hold=%lu\r\n",
+                           inputRaw.lift,
+                           inputRaw.yaw,
+                           (unsigned long)(nowTick - disarmCmdStartTick));
                 }
             }
             else
@@ -989,13 +1044,17 @@ void FlightControl_TaskImpl(void* params)
 
         input.armed = (g_flightState == FLIGHT_STATE_ARMED);
 
+        __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_2,1801);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_1, 1800);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_3, 1800);
+    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_4, 1800);
         if (g_flightState != FLIGHT_STATE_ARMED)
         {
             AttitudeController_Reset(&g_controller, &state);
             g_altHoldActive = 0;
             g_altitudeSp = altitudeM;
             pidReset(&g_altitudePid, altitudeM);
-            applyMotorSafe();
+            //applyMotorSafe();
             yawTargetDeg = state.yaw;
 
             g_debug.rollSp = 0.0f;
@@ -1014,6 +1073,15 @@ void FlightControl_TaskImpl(void* params)
             float imuCtrlScale = 1.0f;
 
             AttitudeController_GenerateSetpoint(&input, &sp);
+
+#if CONFIG_GIMBAL_DEBUG_MODE
+            sp.roll = constrain(sp.roll,
+                                -g_debugTiltAngleLimitDeg,
+                                g_debugTiltAngleLimitDeg);
+            sp.pitch = constrain(sp.pitch,
+                                 -g_debugTiltAngleLimitDeg,
+                                 g_debugTiltAngleLimitDeg);
+#endif
 
             yawStick = constrain(((float)input.yaw - 1500.0f) / 500.0f, -1.0f, 1.0f);
             liftStick = constrain(((float)input.lift - 1500.0f) / 500.0f, -1.0f, 1.0f);
@@ -1100,8 +1168,7 @@ void FlightControl_TaskImpl(void* params)
             g_debug.m2 = motor.m2;
             g_debug.m3 = motor.m3;
             g_debug.m4 = motor.m4;
-        }
-
+        }        
         g_debug.state = g_flightState;
         g_debug.linkAlive = ((nowTick - lastPpmTick) <= pdMS_TO_TICKS(CONFIG_PPM_FAILSAFE_TIMEOUT_MS)) ? 1u : 0u;
         g_debug.sensorCalibrated = g_biasReady;
@@ -1113,7 +1180,7 @@ void FlightControl_TaskImpl(void* params)
         g_debug.throttle = throttleCmd;
 
         imuFreshnessPrev = imuFreshness;
-
+        
         vTaskDelayUntil(&xLastWakeTime, xPeriod);
     }
 }
