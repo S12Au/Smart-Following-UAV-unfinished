@@ -681,6 +681,402 @@ bool FlightControl_GetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, fl
     }
 }
 
+/**
+ * @brief 更新 IMU 新鲜度状态并统计丢包率
+ * @param imuSeen IMU 是否已经接收到过样本
+ * @param imuNewSample 本周期是否接收到新样本
+ * @param nowTick 当前系统 Tick
+ * @param lastImuTick 最近一次 IMU 新样本 Tick
+ * @param imuFreshness IMU 新鲜度输出指针
+ * @param imuStatCycles IMU 统计窗口内总周期数
+ * @param imuStatDrops IMU 统计窗口内丢样本次数
+ * @param imuDropRatePct IMU 丢包率输出（百分比）
+ */
+static void updateImuFreshnessAndDropStats(uint8_t imuSeen,
+                                           uint8_t imuNewSample,
+                                           TickType_t nowTick,
+                                           TickType_t lastImuTick,
+                                           ImuFreshness_t* imuFreshness,
+                                           uint16_t* imuStatCycles,
+                                           uint16_t* imuStatDrops,
+                                           float* imuDropRatePct)
+{
+    TickType_t imuAgeTicks; /* IMU 样本年龄（tick） */
+
+    if (imuFreshness == 0 || imuStatCycles == 0 || imuStatDrops == 0 || imuDropRatePct == 0)
+    {
+        return;
+    }
+
+    if (!imuSeen)
+    {
+        *imuFreshness = IMU_FRESHNESS_LOST;
+        return;
+    }
+
+    imuAgeTicks = nowTick - lastImuTick;
+    if (imuAgeTicks > pdMS_TO_TICKS(CONFIG_IMU_FAILSAFE_TIMEOUT_MS))
+    {
+        *imuFreshness = IMU_FRESHNESS_LOST;
+    }
+    else if (imuAgeTicks > pdMS_TO_TICKS(CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS))
+    {
+        *imuFreshness = IMU_FRESHNESS_PREFAILSAFE;
+    }
+    else if (imuAgeTicks > pdMS_TO_TICKS(CONFIG_IMU_STALE_TIMEOUT_MS))
+    {
+        *imuFreshness = IMU_FRESHNESS_STALE;
+    }
+    else
+    {
+        *imuFreshness = IMU_FRESHNESS_FRESH;
+    }
+
+    (*imuStatCycles)++;
+    if (!imuNewSample)
+    {
+        (*imuStatDrops)++;
+    }
+
+    if (*imuStatCycles >= IMU_DROP_STAT_WINDOW_CYCLES)
+    {
+        *imuDropRatePct = ((float)(*imuStatDrops) * 100.0f) / (float)(*imuStatCycles);
+        *imuStatCycles = 0;
+        *imuStatDrops = 0;
+    }
+}
+
+/**
+ * @brief 使用 IMU 数据更新姿态状态（含零偏校正与磁力计融合）
+ * @param imuSeen IMU 是否已经接收到过样本
+ * @param imuRaw 当前 IMU 原始样本
+ * @param gyroCorrected 零偏校正后的陀螺仪数据输出
+ * @param accelCorrected 零偏校正后的加速度计数据输出
+ * @param sensor 供估计器使用的标准化传感器输入
+ * @param magValid 磁力计样本是否有效
+ * @param latestMagRaw 最新磁力计原始值
+ * @param imuFreshness IMU 新鲜度状态
+ * @param state 当前姿态状态输出
+ */
+static void updateAttitudeStateFromImu(uint8_t imuSeen,
+                                       const struct GYRO_ACCEL_Data* imuRaw,
+                                       int16_t gyroCorrected[3],
+                                       int16_t accelCorrected[3],
+                                       SensorData_t* sensor,
+                                       uint8_t magValid,
+                                       const int16_t latestMagRaw[3],
+                                       ImuFreshness_t imuFreshness,
+                                       AttitudeState_t* state)
+{
+    const EulerAngle_t* e; /* 姿态估计器输出的欧拉角 */
+
+    if (!imuSeen || imuRaw == 0 || sensor == 0 || latestMagRaw == 0 || state == 0)
+    {
+        return;
+    }
+
+    gyroCorrected[0] = (int16_t)(imuRaw->gyro[0] - g_gyroBiasRaw[0]);
+    gyroCorrected[1] = (int16_t)(imuRaw->gyro[1] - g_gyroBiasRaw[1]);
+    gyroCorrected[2] = (int16_t)(imuRaw->gyro[2] - g_gyroBiasRaw[2]);
+
+    accelCorrected[0] = (int16_t)(imuRaw->accel[0] - g_accelBiasRaw[0]);
+    accelCorrected[1] = (int16_t)(imuRaw->accel[1] - g_accelBiasRaw[1]);
+    accelCorrected[2] = (int16_t)(imuRaw->accel[2] - g_accelBiasRaw[2]);
+
+    SensorData_ConvertFromRaw(gyroCorrected, accelCorrected, sensor);
+
+    if (magValid)
+    {
+        if (!normalizeMag(latestMagRaw, sensor->mag))
+        {
+            sensor->mag[0] = 0.0f;
+            sensor->mag[1] = 0.0f;
+            sensor->mag[2] = 0.0f;
+        }
+    }
+
+    if (imuFreshness == IMU_FRESHNESS_FRESH)
+    {
+        AttitudeEstimator_Update(&g_estimator, sensor);
+        e = AttitudeEstimator_GetEuler(&g_estimator);
+
+        state->roll = e->roll;
+        state->pitch = e->pitch;
+        state->yaw = e->yaw;
+        state->rollRate = (float)gyroCorrected[0] / 16.4f;
+        state->pitchRate = (float)gyroCorrected[1] / 16.4f;
+        state->yawRate = (float)gyroCorrected[2] / 16.4f;
+    }
+    else
+    {
+        /* IMU 数据陈旧时冻结姿态并清零角速度反馈，避免重复积分旧样本。 */
+        state->rollRate = 0.0f;
+        state->pitchRate = 0.0f;
+        state->yawRate = 0.0f;
+    }
+}
+
+/**
+ * @brief 根据 PPM/IMU 超时状态更新飞控状态机（失控保护）
+ * @param nowTick 当前系统 Tick
+ * @param lastPpmTick 最近一次有效 PPM Tick
+ * @param lastImuTick 最近一次有效 IMU Tick
+ */
+static void updateFailsafeState(TickType_t nowTick, TickType_t lastPpmTick, TickType_t lastImuTick)
+{
+    uint8_t ppmTimedOut; /* PPM 是否超时 */
+    uint8_t imuTimedOut; /* IMU 是否超时（仅解锁后生效） */
+
+    ppmTimedOut = ((nowTick - lastPpmTick) > pdMS_TO_TICKS(CONFIG_PPM_FAILSAFE_TIMEOUT_MS)) ? 1u : 0u;
+    imuTimedOut = ((g_flightState == FLIGHT_STATE_ARMED) &&
+                   ((nowTick - lastImuTick) > pdMS_TO_TICKS(CONFIG_IMU_FAILSAFE_TIMEOUT_MS))) ? 1u : 0u;
+
+    if (ppmTimedOut || imuTimedOut)
+    {
+        if (g_flightState != FLIGHT_STATE_FAILSAFE)
+        {
+            printf("[FC][STATE] -> FAILSAFE, reason=%s%s, ppmAge=%lu, imuAge=%lu\r\n",
+                   ppmTimedOut ? "PPM_TIMEOUT" : "",
+                   imuTimedOut ? (ppmTimedOut ? "+IMU_TIMEOUT" : "IMU_TIMEOUT") : "",
+                   (unsigned long)(nowTick - lastPpmTick),
+                   (unsigned long)(nowTick - lastImuTick));
+        }
+        g_flightState = FLIGHT_STATE_FAILSAFE;
+    }
+    else if (g_flightState == FLIGHT_STATE_FAILSAFE)
+    {
+        g_flightState = FLIGHT_STATE_DISARMED;
+        printf("[FC][STATE] -> DISARMED, reason=RECOVER_FROM_FAILSAFE\r\n");
+    }
+}
+
+/**
+ * @brief 处理油门最低位下的解锁/上锁摇杆命令
+ * @param inputRaw 原始遥控输入
+ * @param nowTick 当前系统 Tick
+ * @param armCmdStartTick 解锁命令计时起点
+ * @param disarmCmdStartTick 上锁命令计时起点
+ * @param state 当前姿态状态（解锁时用于控制器复位）
+ */
+static void updateArmDisarmCommand(const ControlInput_t* inputRaw,
+                                   TickType_t nowTick,
+                                   TickType_t* armCmdStartTick,
+                                   TickType_t* disarmCmdStartTick,
+                                   const AttitudeState_t* state)
+{
+    if (inputRaw == 0 || armCmdStartTick == 0 || disarmCmdStartTick == 0 || state == 0)
+    {
+        return;
+    }
+
+    if (inputRaw->lift <= CONFIG_THROTTLE_MIN)
+    {
+        if (inputRaw->yaw >= CONFIG_ARM_YAW_HIGH)
+        {
+            if (*armCmdStartTick == 0)
+            {
+                *armCmdStartTick = nowTick;
+            }
+            else if ((g_flightState == FLIGHT_STATE_DISARMED) &&
+                     g_biasReady &&
+                     (nowTick - *armCmdStartTick >= pdMS_TO_TICKS(CONFIG_ARM_HOLD_MS)))
+            {
+                g_flightState = FLIGHT_STATE_ARMED;
+                printf("unlock\r\n");
+                AttitudeController_Reset(&g_controller, state);
+            }
+        }
+        else
+        {
+            *armCmdStartTick = 0;
+        }
+
+        if (inputRaw->yaw <= CONFIG_DISARM_YAW_LOW)
+        {
+            if (*disarmCmdStartTick == 0)
+            {
+                *disarmCmdStartTick = nowTick;
+            }
+            else if ((g_flightState == FLIGHT_STATE_ARMED) &&
+                     (nowTick - *disarmCmdStartTick >= pdMS_TO_TICKS(CONFIG_DISARM_HOLD_MS)))
+            {
+                g_flightState = FLIGHT_STATE_DISARMED;
+                printf("[FC][STATE] -> DISARMED, reason=RC_DISARM_CMD, lift=%u, yaw=%u, hold=%lu\r\n",
+                       inputRaw->lift,
+                       inputRaw->yaw,
+                       (unsigned long)(nowTick - *disarmCmdStartTick));
+            }
+        }
+        else
+        {
+            *disarmCmdStartTick = 0;
+        }
+    }
+    else
+    {
+        *armCmdStartTick = 0;
+        *disarmCmdStartTick = 0;
+    }
+}
+
+/**
+ * @brief 应用锁定状态下的控制器复位与安全输出逻辑
+ * @param state 当前姿态状态
+ * @param altitudeM 当前高度
+ * @param yawTargetDeg 当前偏航目标角指针
+ */
+static void applyDisarmedBehavior(const AttitudeState_t* state, float altitudeM, float* yawTargetDeg)
+{
+    if (state == 0 || yawTargetDeg == 0)
+    {
+        return;
+    }
+
+    AttitudeController_Reset(&g_controller, state);
+    g_altHoldActive = 0;
+    g_altitudeSp = altitudeM;
+    pidReset(&g_altitudePid, altitudeM);
+    *yawTargetDeg = state->yaw;
+
+    g_debug.rollSp = 0.0f;
+    g_debug.pitchSp = 0.0f;
+    g_debug.yawRateSp = 0.0f;
+    g_debug.rollOut = 0.0f;
+    g_debug.pitchOut = 0.0f;
+    g_debug.yawOut = 0.0f;
+}
+
+/**
+ * @brief 更新定高模式并生成油门指令
+ * @param input 当前滤波后的遥控输入
+ * @param altitudeM 当前高度
+ * @param pressureValid 气压数据是否有效
+ * @param throttleCmd 油门输出指令指针
+ */
+static void updateAltitudeHoldThrottle(const ControlInput_t* input,
+                                       float altitudeM,
+                                       uint8_t pressureValid,
+                                       uint16_t* throttleCmd)
+{
+    float liftStick;   /* 升力输入归一化值 */
+    float altitudeOut; /* 高度环输出量 */
+
+    if (input == 0 || throttleCmd == 0)
+    {
+        return;
+    }
+
+    liftStick = constrain(((float)input->lift - 1500.0f) / 500.0f, -1.0f, 1.0f);
+    altitudeOut = 0.0f;
+    *throttleCmd = input->lift;
+
+    if (!CONFIG_GIMBAL_DEBUG_MODE && pressureValid && g_baroRefReady)
+    {
+        if (fabsf(liftStick) < 0.08f)
+        {
+            if (!g_altHoldActive)
+            {
+                g_altHoldActive = 1;
+                g_altitudeSp = altitudeM;
+                pidReset(&g_altitudePid, altitudeM);
+            }
+
+            pidSetDesired(&g_altitudePid, g_altitudeSp);
+            altitudeOut = pidUpdate(&g_altitudePid, altitudeM, false);
+            *throttleCmd = (uint16_t)constrain((float)input->lift + altitudeOut,
+                                               (float)CONFIG_MOTOR_IDLE_THROTTLE,
+                                               (float)CONFIG_MOTOR_MAX_THROTTLE);
+        }
+        else
+        {
+            g_altHoldActive = 0;
+            g_altitudeSp = altitudeM;
+            pidReset(&g_altitudePid, altitudeM);
+        }
+    }
+    else
+    {
+        g_altHoldActive = 0;
+        g_altitudeSp = altitudeM;
+        pidReset(&g_altitudePid, altitudeM);
+    }
+
+    *throttleCmd = clampThrottleForDebug(*throttleCmd);
+}
+
+/**
+ * @brief 根据偏航摇杆更新偏航控制目标（摇杆回中时启用航向保持）
+ * @param input 当前滤波后的遥控输入
+ * @param state 当前姿态状态
+ * @param yawTargetDeg 偏航目标角指针
+ * @param sp 姿态设定点
+ */
+static void updateYawSetpoint(const ControlInput_t* input,
+                              const AttitudeState_t* state,
+                              float* yawTargetDeg,
+                              AttitudeSetpoint_t* sp)
+{
+    float yawStick; /* 偏航输入归一化值 */
+    float yawErr;   /* 偏航角误差 */
+
+    if (input == 0 || state == 0 || yawTargetDeg == 0 || sp == 0)
+    {
+        return;
+    }
+
+    yawStick = constrain(((float)input->yaw - 1500.0f) / 500.0f, -1.0f, 1.0f);
+    if (fabsf(yawStick) < 0.05f)
+    {
+        yawErr = capAngle(*yawTargetDeg - state->yaw);
+        sp->yawRate = constrain(yawErr * 4.0f, -CONFIG_MAX_YAW_RATE, CONFIG_MAX_YAW_RATE);
+    }
+    else
+    {
+        *yawTargetDeg = state->yaw;
+    }
+}
+
+/**
+ * @brief 根据 IMU 新鲜度施加控制降级与油门限制
+ * @param imuFreshness 当前 IMU 新鲜度
+ * @param imuFreshnessPrev 上一周期 IMU 新鲜度
+ * @param state 当前姿态状态
+ * @param throttleCmd 油门输出指令
+ * @return 控制量缩放系数
+ */
+static float applyImuFreshnessControl(ImuFreshness_t imuFreshness,
+                                      ImuFreshness_t imuFreshnessPrev,
+                                      const AttitudeState_t* state,
+                                      uint16_t* throttleCmd)
+{
+    float imuCtrlScale = 1.0f; /* IMU 降级控制缩放系数 */
+
+    if (state == 0 || throttleCmd == 0)
+    {
+        return imuCtrlScale;
+    }
+
+    if (imuFreshness == IMU_FRESHNESS_STALE)
+    {
+        imuCtrlScale = IMU_CTRL_SCALE_STALE;
+    }
+    else if (imuFreshness == IMU_FRESHNESS_PREFAILSAFE)
+    {
+        imuCtrlScale = IMU_CTRL_SCALE_PREFAILSAFE;
+        *throttleCmd = (uint16_t)constrain((float)(*throttleCmd),
+                                           (float)CONFIG_MOTOR_IDLE_THROTTLE,
+                                           (float)(CONFIG_MOTOR_IDLE_THROTTLE + 80));
+    }
+
+    if ((imuFreshness != IMU_FRESHNESS_FRESH) && (imuFreshnessPrev == IMU_FRESHNESS_FRESH))
+    {
+        /* 进入 IMU 降级状态时重置控制器积分，避免旧误差累计导致突变。 */
+        AttitudeController_Reset(&g_controller, state);
+    }
+
+    return imuCtrlScale;
+}
+
 /** 
  * @brief 飞行控制主任务
  * @param params 任务参数，当前未使用
@@ -839,87 +1235,11 @@ void FlightControl_TaskImpl(void* params)
             imuRaw = imuLast;
         }
 
-        if (imuSeen)
-        {
-            TickType_t imuAgeTicks = nowTick - lastImuTick;
-            if (imuAgeTicks > pdMS_TO_TICKS(CONFIG_IMU_FAILSAFE_TIMEOUT_MS))
-            {
-                imuFreshness = IMU_FRESHNESS_LOST;
-            }
-            else if (imuAgeTicks > pdMS_TO_TICKS(CONFIG_IMU_PREFAILSAFE_TIMEOUT_MS))
-            {
-                imuFreshness = IMU_FRESHNESS_PREFAILSAFE;
-            }
-            else if (imuAgeTicks > pdMS_TO_TICKS(CONFIG_IMU_STALE_TIMEOUT_MS))
-            {
-                imuFreshness = IMU_FRESHNESS_STALE;
-            }
-            else
-            {
-                imuFreshness = IMU_FRESHNESS_FRESH;
-            }
+        updateImuFreshnessAndDropStats(imuSeen, imuNewSample, nowTick, lastImuTick,
+            &imuFreshness, &imuStatCycles, &imuStatDrops, &imuDropRatePct);
 
-            imuStatCycles++;
-            if (!imuNewSample)
-            {
-                imuStatDrops++;
-            }
-
-            if (imuStatCycles >= IMU_DROP_STAT_WINDOW_CYCLES)
-            {
-                imuDropRatePct = ((float)imuStatDrops * 100.0f) / (float)imuStatCycles;
-                imuStatCycles = 0;
-                imuStatDrops = 0;
-            }
-        }
-        else
-        {
-            imuFreshness = IMU_FRESHNESS_LOST;
-        }
-
-        if (imuSeen)
-        {
-            gyroCorrected[0] = (int16_t)(imuRaw.gyro[0] - g_gyroBiasRaw[0]);
-            gyroCorrected[1] = (int16_t)(imuRaw.gyro[1] - g_gyroBiasRaw[1]);
-            gyroCorrected[2] = (int16_t)(imuRaw.gyro[2] - g_gyroBiasRaw[2]);
-
-            accelCorrected[0] = (int16_t)(imuRaw.accel[0] - g_accelBiasRaw[0]);
-            accelCorrected[1] = (int16_t)(imuRaw.accel[1] - g_accelBiasRaw[1]);
-            accelCorrected[2] = (int16_t)(imuRaw.accel[2] - g_accelBiasRaw[2]);
-
-            SensorData_ConvertFromRaw(gyroCorrected, accelCorrected, &sensor);
-
-            if (magValid)
-            {
-                if (!normalizeMag(latestMagRaw, sensor.mag))
-                {
-                    sensor.mag[0] = 0.0f;
-                    sensor.mag[1] = 0.0f;
-                    sensor.mag[2] = 0.0f;
-                }
-            }
-
-            if (imuFreshness == IMU_FRESHNESS_FRESH)
-            {
-                AttitudeEstimator_Update(&g_estimator, &sensor);
-
-                const EulerAngle_t* e = AttitudeEstimator_GetEuler(&g_estimator);
-
-                state.roll = e->roll;
-                state.pitch = e->pitch;
-                state.yaw = e->yaw;
-                state.rollRate = (float)gyroCorrected[0] / 16.4f;
-                state.pitchRate = (float)gyroCorrected[1] / 16.4f;
-                state.yawRate = (float)gyroCorrected[2] / 16.4f;
-            }
-            else
-            {
-                /* IMU 数据陈旧时冻结姿态并清零角速度反馈，避免重复积分旧样本。 */
-                state.rollRate = 0.0f;
-                state.pitchRate = 0.0f;
-                state.yawRate = 0.0f;
-            }
-        }
+        updateAttitudeStateFromImu(imuSeen, &imuRaw, gyroCorrected, accelCorrected,
+             &sensor, magValid, latestMagRaw, imuFreshness, &state);
 
         if (magValid && ((nowTick - lastMagTick) > pdMS_TO_TICKS(CONFIG_MAG_STALE_TIMEOUT_MS)))
         {
@@ -961,29 +1281,7 @@ void FlightControl_TaskImpl(void* params)
         input.lift = lowPassChannelU16(input.lift, inputRaw.lift, RC_FILTER_ALPHA);
         input.yaw = lowPassChannelU16(input.yaw, inputRaw.yaw, RC_FILTER_ALPHA);
 
-        {
-            uint8_t ppmTimedOut = ((nowTick - lastPpmTick) > pdMS_TO_TICKS(CONFIG_PPM_FAILSAFE_TIMEOUT_MS)) ? 1u : 0u;
-            uint8_t imuTimedOut = ((g_flightState == FLIGHT_STATE_ARMED) &&
-                                   ((nowTick - lastImuTick) > pdMS_TO_TICKS(CONFIG_IMU_FAILSAFE_TIMEOUT_MS))) ? 1u : 0u;
-
-            if (ppmTimedOut || imuTimedOut)
-            {
-                if (g_flightState != FLIGHT_STATE_FAILSAFE)
-                {
-                    printf("[FC][STATE] -> FAILSAFE, reason=%s%s, ppmAge=%lu, imuAge=%lu\r\n",
-                           ppmTimedOut ? "PPM_TIMEOUT" : "",
-                           imuTimedOut ? (ppmTimedOut ? "+IMU_TIMEOUT" : "IMU_TIMEOUT") : "",
-                           (unsigned long)(nowTick - lastPpmTick),
-                           (unsigned long)(nowTick - lastImuTick));
-                }
-                g_flightState = FLIGHT_STATE_FAILSAFE;
-            }
-            else if (g_flightState == FLIGHT_STATE_FAILSAFE)
-            {
-                g_flightState = FLIGHT_STATE_DISARMED;
-                printf("[FC][STATE] -> DISARMED, reason=RECOVER_FROM_FAILSAFE\r\n");
-            }
-        }
+        updateFailsafeState(nowTick, lastPpmTick, lastImuTick);
 /*
         if (g_flightState == FLIGHT_STATE_DISARMED){
             printf("%d  %d\r\n", inputRaw.lift, inputRaw.yaw);
@@ -993,83 +1291,20 @@ void FlightControl_TaskImpl(void* params)
             printf("yes\r\n");
         }*/
 
-        if (inputRaw.lift <= CONFIG_THROTTLE_MIN)
-        {
-            if (inputRaw.yaw >= CONFIG_ARM_YAW_HIGH)
-            {
-                if (armCmdStartTick == 0)
-                {
-                    armCmdStartTick = nowTick;
-                }
-                else if ((g_flightState == FLIGHT_STATE_DISARMED) &&
-                         g_biasReady &&
-                         (nowTick - armCmdStartTick >= pdMS_TO_TICKS(CONFIG_ARM_HOLD_MS)))
-                {
-                    g_flightState = FLIGHT_STATE_ARMED;
-                    printf("unlock\r\n");
-                    AttitudeController_Reset(&g_controller, &state);
-                }
-            }
-            else
-            {
-                armCmdStartTick = 0;
-            }
-
-            if (inputRaw.yaw <= CONFIG_DISARM_YAW_LOW)
-            {
-                if (disarmCmdStartTick == 0)
-                {
-                    disarmCmdStartTick = nowTick;
-                }
-                else if ((g_flightState == FLIGHT_STATE_ARMED) &&
-                         (nowTick - disarmCmdStartTick >= pdMS_TO_TICKS(CONFIG_DISARM_HOLD_MS)))
-                {
-                    g_flightState = FLIGHT_STATE_DISARMED;
-                    printf("[FC][STATE] -> DISARMED, reason=RC_DISARM_CMD, lift=%u, yaw=%u, hold=%lu\r\n",
-                           inputRaw.lift,
-                           inputRaw.yaw,
-                           (unsigned long)(nowTick - disarmCmdStartTick));
-                }
-            }
-            else
-            {
-                disarmCmdStartTick = 0;
-            }
-        }
-        else
-        {
-            armCmdStartTick = 0;
-            disarmCmdStartTick = 0;
-        }
+        updateArmDisarmCommand(&inputRaw,
+                               nowTick,
+                               &armCmdStartTick,
+                               &disarmCmdStartTick,
+                               &state);
 
         input.armed = (g_flightState == FLIGHT_STATE_ARMED);
 
-        __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_2,1801);
-    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_1, 1800);
-    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_3, 1800);
-    __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_4, 1800);
         if (g_flightState != FLIGHT_STATE_ARMED)
         {
-            AttitudeController_Reset(&g_controller, &state);
-            g_altHoldActive = 0;
-            g_altitudeSp = altitudeM;
-            pidReset(&g_altitudePid, altitudeM);
-            //applyMotorSafe();
-            yawTargetDeg = state.yaw;
-
-            g_debug.rollSp = 0.0f;
-            g_debug.pitchSp = 0.0f;
-            g_debug.yawRateSp = 0.0f;
-            g_debug.rollOut = 0.0f;
-            g_debug.pitchOut = 0.0f;
-            g_debug.yawOut = 0.0f;
+            applyDisarmedBehavior(&state, altitudeM, &yawTargetDeg);
         }
         else
         {
-            float yawStick;                 /*偏航输入的归一化后的值*/
-            float yawErr;                   /*偏航误差*/
-            float liftStick;                /*升力输入的归一化后的值*/
-            float altitudeOut = 0.0f;       /*高度输出*/
             float imuCtrlScale = 1.0f;
 
             AttitudeController_GenerateSetpoint(&input, &sp);
@@ -1083,71 +1318,12 @@ void FlightControl_TaskImpl(void* params)
                                  g_debugTiltAngleLimitDeg);
 #endif
 
-            yawStick = constrain(((float)input.yaw - 1500.0f) / 500.0f, -1.0f, 1.0f);
-            liftStick = constrain(((float)input.lift - 1500.0f) / 500.0f, -1.0f, 1.0f);
-
-            throttleCmd = input.lift;
-
-            if (!CONFIG_GIMBAL_DEBUG_MODE && pressureValid && g_baroRefReady)
-            {
-                if (fabsf(liftStick) < 0.08f)
-                {
-                    if (!g_altHoldActive)
-                    {
-                        g_altHoldActive = 1;
-                        g_altitudeSp = altitudeM;
-                        pidReset(&g_altitudePid, altitudeM);
-                    }
-
-                    pidSetDesired(&g_altitudePid, g_altitudeSp);
-                    altitudeOut = pidUpdate(&g_altitudePid, altitudeM, false);
-                    throttleCmd = (uint16_t)constrain((float)input.lift + altitudeOut,
-                                                     (float)CONFIG_MOTOR_IDLE_THROTTLE,
-                                                     (float)CONFIG_MOTOR_MAX_THROTTLE);
-                }
-                else
-                {
-                    g_altHoldActive = 0;
-                    g_altitudeSp = altitudeM;
-                    pidReset(&g_altitudePid, altitudeM);
-                }
-            }
-            else
-            {
-                g_altHoldActive = 0;
-                g_altitudeSp = altitudeM;
-                pidReset(&g_altitudePid, altitudeM);
-            }
-
-            throttleCmd = clampThrottleForDebug(throttleCmd);
-
-            if (fabsf(yawStick) < 0.05f)
-            {
-                yawErr = capAngle(yawTargetDeg - state.yaw);
-                sp.yawRate = constrain(yawErr * 4.0f, -CONFIG_MAX_YAW_RATE, CONFIG_MAX_YAW_RATE);
-            }
-            else
-            {
-                yawTargetDeg = state.yaw;
-            }
-
-            if (imuFreshness == IMU_FRESHNESS_STALE)
-            {
-                imuCtrlScale = IMU_CTRL_SCALE_STALE;
-            }
-            else if (imuFreshness == IMU_FRESHNESS_PREFAILSAFE)
-            {
-                imuCtrlScale = IMU_CTRL_SCALE_PREFAILSAFE;
-                throttleCmd = (uint16_t)constrain((float)throttleCmd,
-                                                  (float)CONFIG_MOTOR_IDLE_THROTTLE,
-                                                  (float)(CONFIG_MOTOR_IDLE_THROTTLE + 80));
-            }
-
-            if ((imuFreshness != IMU_FRESHNESS_FRESH) && (imuFreshnessPrev == IMU_FRESHNESS_FRESH))
-            {
-                /* 进入 IMU 降级状态时重置控制器积分，避免旧误差累计导致突变。 */
-                AttitudeController_Reset(&g_controller, &state);
-            }
+            updateAltitudeHoldThrottle(&input, altitudeM, pressureValid, &throttleCmd);
+            updateYawSetpoint(&input, &state, &yawTargetDeg, &sp);
+            imuCtrlScale = applyImuFreshnessControl(imuFreshness,
+                                                    imuFreshnessPrev,
+                                                    &state,
+                                                    &throttleCmd);
 
             sp.roll *= imuCtrlScale;
             sp.pitch *= imuCtrlScale;
