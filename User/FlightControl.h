@@ -73,6 +73,7 @@ typedef enum
 
 void FlightControl_Task(void* params);
 void FlightControl_Init(void);
+void FlightControl_NotifyImuSampleReady(void);
 void FlightControl_GetDebugSnapshot(FlightDebugData_t* out);
 bool FlightControl_SetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, float value);
 bool FlightControl_GetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, float* outValue);

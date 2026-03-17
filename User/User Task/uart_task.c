@@ -383,7 +383,8 @@ void Uart_Send_Task()
 		
 		//vTaskDelayUntil(&xLastWakeTime, xPeriod);
 		
-		printf("123我是\r\n");
+		printf("123");
+		
 		vTaskDelay(1000);
 	}
 	

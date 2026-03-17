@@ -5,6 +5,7 @@
 #include "Queue.h"
 #include "semphr.h"
 #include "i2c.h"
+#include "FlightControl.h"
 
 
 /* ==================== I2C 通信超时与重试配置 ==================== */
@@ -768,6 +769,7 @@ void Get_GYROandACCEL()
 		MPU6050_Read_GYRO(idata.gyro);
 		MPU6050_Read_ACCEL(idata.accel);
 		xQueueOverwrite(QueueGYROACCEL, &idata);
+		FlightControl_NotifyImuSampleReady();
 		vTaskDelayUntil(&xLastWakeTime, xPeriod);		//固定延时到上一次读取结束的2ms以后
 	}
 }

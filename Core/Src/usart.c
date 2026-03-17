@@ -285,7 +285,7 @@ int fgetc(FILE *f)
 // 添加以下函数以确保完整的stdio支持
 int __io_putchar(int ch)
 {
-  HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xFFFF);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xffff);
   return ch;
 }
 

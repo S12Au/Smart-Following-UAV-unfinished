@@ -153,11 +153,7 @@ int main(void)
   while (1)
   {
 	  
-	  /*
-	  HAL_I2C_Mem_Write_DMA(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_PWR_MGMT_1, 
-			I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t));*/
-	  HAL_I2C_Mem_Write(&hi2c1, MPU6050_DEVICE_ADRESS<<1, MPU6050_PWR_MGMT_1,
-                          I2C_MEMADD_SIZE_8BIT, &buf, sizeof(uint8_t), 100);
+	  
 		Delay_ms(10);
 		
 		
