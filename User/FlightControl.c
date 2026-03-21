@@ -532,7 +532,7 @@ void FlightControl_Init(void)
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
 
     Motor_Init();
-
+        printf("motor ok\r\n");
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_1, CONFIG_MOTOR_MIN_THROTTLE);
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_2, CONFIG_MOTOR_MIN_THROTTLE);
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_3, CONFIG_MOTOR_MIN_THROTTLE);
@@ -832,8 +832,9 @@ static void updateAttitudeStateFromImu(uint8_t imuSeen,
  * @param nowTick 当前系统 Tick
  * @param lastPpmTick 最近一次有效 PPM Tick
  * @param lastImuTick 最近一次有效 IMU Tick
+ * @param state 当前姿态状态
  */
-static void updateFailsafeState(TickType_t nowTick, TickType_t lastPpmTick, TickType_t lastImuTick)
+static void updateFailsafeState(TickType_t nowTick, TickType_t lastPpmTick, TickType_t lastImuTick, const AttitudeState_t* state)
 {
     uint8_t ppmTimedOut; /* PPM 是否超时 */
     uint8_t imuTimedOut; /* IMU 是否超时（仅解锁后生效） */
@@ -844,6 +845,8 @@ static void updateFailsafeState(TickType_t nowTick, TickType_t lastPpmTick, Tick
 
     if (ppmTimedOut || imuTimedOut)
     {
+        applyMotorSafe();
+        AttitudeController_Reset(&g_controller, state);
         if (g_flightState != FLIGHT_STATE_FAILSAFE)
         {
             printf("[FC][STATE] -> FAILSAFE, reason=%s%s, ppmAge=%lu, imuAge=%lu\r\n",
@@ -884,6 +887,7 @@ static void updateArmDisarmCommand(const ControlInput_t* inputRaw,
     {
         if (inputRaw->yaw >= CONFIG_ARM_YAW_HIGH)
         {
+            printf("time:%d\r\n",nowTick - *armCmdStartTick);
             if (*armCmdStartTick == 0)
             {
                 *armCmdStartTick = nowTick;
@@ -1294,21 +1298,9 @@ void FlightControl_TaskImpl(void* params)
         input.lift = lowPassChannelU16(input.lift, inputRaw.lift, RC_FILTER_ALPHA);
         input.yaw = lowPassChannelU16(input.yaw, inputRaw.yaw, RC_FILTER_ALPHA);
 
-        updateFailsafeState(nowTick, lastPpmTick, lastImuTick);
-/*
-        if (g_flightState == FLIGHT_STATE_DISARMED){
-            printf("%d  %d\r\n", inputRaw.lift, inputRaw.yaw);
-        }
-        else if (g_flightState == FLIGHT_STATE_ARMED)
-        { 
-            printf("yes\r\n");
-        }*/
+        updateFailsafeState(nowTick, lastPpmTick, lastImuTick, &state);
 
-        updateArmDisarmCommand(&inputRaw,
-                               nowTick,
-                               &armCmdStartTick,
-                               &disarmCmdStartTick,
-                               &state);
+        updateArmDisarmCommand(&inputRaw, nowTick, &armCmdStartTick, &disarmCmdStartTick, &state);
 
         input.armed = (g_flightState == FLIGHT_STATE_ARMED);
 

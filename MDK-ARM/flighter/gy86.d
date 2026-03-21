@@ -47,3 +47,5 @@ flighter\gy86.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h
 flighter\gy86.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h
 flighter\gy86.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h
 flighter\gy86.o: ../Core/Inc/i2c.h
+flighter\gy86.o: ..\User\FlightControl.h
+flighter\gy86.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h

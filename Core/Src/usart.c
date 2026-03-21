@@ -27,11 +27,55 @@
 
 /* USER CODE BEGIN 0 */
 
+#define UART1_TX_RING_SIZE 1024u
+
+static uint8_t s_uart1TxRing[UART1_TX_RING_SIZE];
+static volatile uint16_t s_uart1TxHead = 0u;
+static volatile uint16_t s_uart1TxTail = 0u;
+static volatile uint16_t s_uart1TxDmaLen = 0u;
+static volatile uint8_t s_uart1TxDmaBusy = 0u;
+
+static void uart1TxKickLocked(void)
+{
+  uint16_t head;
+  uint16_t tail;
+  uint16_t len;
+
+  if (s_uart1TxDmaBusy != 0u)
+  {
+    return;
+  }
+
+  head = s_uart1TxHead;
+  tail = s_uart1TxTail;
+  if (head == tail)
+  {
+    return;
+  }
+
+  if (head > tail)
+  {
+    len = (uint16_t)(head - tail);
+  }
+  else
+  {
+    len = (uint16_t)(UART1_TX_RING_SIZE - tail);
+  }
+
+  if (HAL_UART_Transmit_DMA(&huart1, &s_uart1TxRing[tail], len) == HAL_OK)
+  {
+    s_uart1TxDmaLen = len;
+    s_uart1TxDmaBusy = 1u;
+  }
+}
+
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart6;
+DMA_HandleTypeDef hdma_usart1_rx;
+DMA_HandleTypeDef hdma_usart1_tx;
 
 /* USART1 init function */
 
@@ -145,6 +189,43 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+    /* USART1 DMA Init */
+    /* USART1_RX Init */
+    hdma_usart1_rx.Instance = DMA2_Stream2;
+    hdma_usart1_rx.Init.Channel = DMA_CHANNEL_4;
+    hdma_usart1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_usart1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart1_rx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart1_rx.Init.Mode = DMA_NORMAL;
+    hdma_usart1_rx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart1_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmarx,hdma_usart1_rx);
+
+    /* USART1_TX Init */
+    hdma_usart1_tx.Instance = DMA2_Stream7;
+    hdma_usart1_tx.Init.Channel = DMA_CHANNEL_4;
+    hdma_usart1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_usart1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart1_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart1_tx.Init.Mode = DMA_NORMAL;
+    hdma_usart1_tx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart1_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart1_tx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmatx,hdma_usart1_tx);
+
     /* USART1 interrupt Init */
     HAL_NVIC_SetPriority(USART1_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(USART1_IRQn);
@@ -222,6 +303,10 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     */
     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_6|GPIO_PIN_7);
 
+    /* USART1 DMA DeInit */
+    HAL_DMA_DeInit(uartHandle->hdmarx);
+    HAL_DMA_DeInit(uartHandle->hdmatx);
+
     /* USART1 interrupt Deinit */
     HAL_NVIC_DisableIRQ(USART1_IRQn);
   /* USER CODE BEGIN USART1_MspDeInit 1 */
@@ -269,10 +354,63 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 }
 
 /* USER CODE BEGIN 1 */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart)
+{
+  if (huart == &huart1)
+  {
+    uint16_t newTail = (uint16_t)(s_uart1TxTail + s_uart1TxDmaLen);
+    if (newTail >= UART1_TX_RING_SIZE)
+    {
+      newTail = (uint16_t)(newTail - UART1_TX_RING_SIZE);
+    }
+
+    s_uart1TxTail = newTail;
+    s_uart1TxDmaBusy = 0u;
+    s_uart1TxDmaLen = 0u;
+    uart1TxKickLocked();
+  }
+}
+
 int fputc(int ch, FILE *f)
 {
-  HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xffff);
-  return ch;
+  (void)f;
+  return __io_putchar(ch);
+}
+
+uint16_t Uart1_WriteAsync(const uint8_t* data, uint16_t len)
+{
+  uint32_t primask;
+  uint16_t i;
+
+  if (data == NULL || len == 0u)
+  {
+    return 0u;
+  }
+
+  primask = __get_PRIMASK();
+  __disable_irq();
+
+  for (i = 0u; i < len; i++)
+  {
+    uint16_t head = s_uart1TxHead;
+    uint16_t nextHead = (uint16_t)((head + 1u) % UART1_TX_RING_SIZE);
+    if (nextHead == s_uart1TxTail)
+    {
+      break;
+    }
+
+    s_uart1TxRing[head] = data[i];
+    s_uart1TxHead = nextHead;
+  }
+
+  uart1TxKickLocked();
+
+  if (primask == 0u)
+  {
+    __enable_irq();
+  }
+
+  return i;
 }
 
 int fgetc(FILE *f)
@@ -285,7 +423,8 @@ int fgetc(FILE *f)
 // 添加以下函数以确保完整的stdio支持
 int __io_putchar(int ch)
 {
-  HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xffff);
+  uint8_t c = (uint8_t)ch;
+  (void)Uart1_WriteAsync(&c, 1u);
   return ch;
 }
 

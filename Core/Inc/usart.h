@@ -47,10 +47,14 @@ extern UART_HandleTypeDef huart6;
 #define FALSE 0
 #endif
 
+extern DMA_HandleTypeDef hdma_usart1_rx;
+extern DMA_HandleTypeDef hdma_usart1_tx;
+
 int fputc(int ch, FILE *f);
 int fgetc(FILE *f);
 int __io_putchar(int ch);
 int __io_getchar(void);
+uint16_t Uart1_WriteAsync(const uint8_t* data, uint16_t len);
 //void Uart_Send_Task();
 /* USER CODE END Private defines */
 

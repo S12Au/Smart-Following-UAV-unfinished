@@ -11,42 +11,66 @@
 #include "FlightControl.h"
 #include "autoconf.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 #define UART1_RX_RING_SIZE 256u
+#define UART1_RX_DMA_BUF_SIZE 64u
 
 static volatile uint8_t s_uart1RxRing[UART1_RX_RING_SIZE];
 static volatile uint16_t s_uart1RxHead = 0;
 static volatile uint16_t s_uart1RxTail = 0;
 static volatile uint8_t s_uart1RxOverflow = 0;
-static uint8_t s_uart1RxByte = 0;
+static uint8_t s_uart1RxDmaBuf[UART1_RX_DMA_BUF_SIZE];
+static volatile uint8_t s_uart1RxDmaStarted = 0u;
 
-static void uart1RxStartIT(void)
+static void uart1RxStartDma(void)
 {
-	if (HAL_UART_Receive_IT(&huart1, &s_uart1RxByte, 1) != HAL_OK)
+	if (s_uart1RxDmaStarted != 0u)
 	{
-		/* 下次任务循环会继续重试启动中断接收 */
+		return;
+	}
+
+	if (HAL_UARTEx_ReceiveToIdle_DMA(&huart1, s_uart1RxDmaBuf, UART1_RX_DMA_BUF_SIZE) == HAL_OK)
+	{
+		s_uart1RxDmaStarted = 1u;
+		__HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
 	}
 }
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart)
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t Size)
 {
 	if (huart->Instance == USART1)
 	{
-		uint16_t nextHead = (uint16_t)((s_uart1RxHead + 1u) % UART1_RX_RING_SIZE);
+		uint16_t i;
 
-		if (nextHead != s_uart1RxTail)
+		for (i = 0u; i < Size; i++)
 		{
-			s_uart1RxRing[s_uart1RxHead] = s_uart1RxByte;
-			s_uart1RxHead = nextHead;
-		}
-		else
-		{
-			s_uart1RxOverflow = 1u;
+			uint16_t nextHead = (uint16_t)((s_uart1RxHead + 1u) % UART1_RX_RING_SIZE);
+
+			if (nextHead != s_uart1RxTail)
+			{
+				s_uart1RxRing[s_uart1RxHead] = s_uart1RxDmaBuf[i];
+				s_uart1RxHead = nextHead;
+			}
+			else
+			{
+				s_uart1RxOverflow = 1u;
+			}
 		}
 
-		uart1RxStartIT();
+		s_uart1RxDmaStarted = 0u;
+		uart1RxStartDma();
+	}
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef* huart)
+{
+	if (huart->Instance == USART1)
+	{
+		s_uart1RxDmaStarted = 0u;
+		uart1RxStartDma();
 	}
 }
 
@@ -302,7 +326,7 @@ static void processUartRx(void)
 	uint8_t ch;
 	uint8_t i;
 
-	uart1RxStartIT();
+	uart1RxStartDma();
 
 	if (s_uart1RxOverflow != 0u)
 	{
@@ -350,42 +374,21 @@ void Uart_Send_Task()
 	TickType_t xLastWakeTime = xTaskGetTickCount();
 	const TickType_t xPeriod = pdMS_TO_TICKS(1000 / CONFIG_UART_DEBUG_RATE_HZ);
 
-	uart1RxStartIT();
+	uart1RxStartDma();
 
 	//printf("FC,st,lk,cal,imuFresh,imuDrop%%,thr,r,p,y,rSp,pSp,ySp,rOut,pOut,yOut,m1,m2,m3,m4\r\n");
 	while(1)
 	{
-		//processUartRx();
+		processUartRx();
 
-		//FlightControl_GetDebugSnapshot(&dbg);
-		/*
-		printf("FC,%d,%u,%u,%u,%.2f,%u,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%u,%u,%u,%u\r\n",
-				(int)dbg.state,
-				dbg.linkAlive,
-				dbg.sensorCalibrated,
-				dbg.imuFreshness,
-				dbg.imuDropRatePct,
-				dbg.throttle,
-				dbg.roll,
-				dbg.pitch,
-				dbg.yaw,
-				dbg.rollSp,
-				dbg.pitchSp,
-				dbg.yawRateSp,
-				dbg.rollOut,
-				dbg.pitchOut,
-				dbg.yawOut,
-				dbg.m1,
-				dbg.m2,
-				dbg.m3,
-				dbg.m4);*/
+		FlightControl_GetDebugSnapshot(&dbg);
+		
+		printf("%.2f %.2f %.2f %u\r\n", dbg.pitch, dbg.roll, dbg.yaw, dbg.throttle);
 
 		
 		//vTaskDelayUntil(&xLastWakeTime, xPeriod);
+		vTaskDelay(pdMS_TO_TICKS(1000));
 		
-		printf("123");
-		
-		vTaskDelay(1000);
 	}
 	
 	/*

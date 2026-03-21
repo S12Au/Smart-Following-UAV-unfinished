@@ -52,7 +52,7 @@ flighter\freertos.o: ../Core/Inc/usart.h
 flighter\freertos.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
 flighter\freertos.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h
 flighter\freertos.o: ../Core/Inc/i2c.h
-flighter\freertos.o: ..\User\User Task\uart_task.h
-flighter\freertos.o: ..\User\User Task\getPPM_task.h
-flighter\freertos.o: ..\User\User Task\flightcontrol_task.h
+flighter\freertos.o: C:/Users/YLWIS/Desktop/Projects/自动跟拍无人机/stm32/flighter/User/User Task/uart_task.h
+flighter\freertos.o: C:/Users/YLWIS/Desktop/Projects/自动跟拍无人机/stm32/flighter/User/User Task/getPPM_task.h
+flighter\freertos.o: C:/Users/YLWIS/Desktop/Projects/自动跟拍无人机/stm32/flighter/User/User Task/flightcontrol_task.h
 flighter\freertos.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h

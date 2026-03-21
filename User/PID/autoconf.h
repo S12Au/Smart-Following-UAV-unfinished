@@ -53,7 +53,7 @@
  * 1: 启用调试保护，限制总油门和最终电机输出，并关闭定高模式
  * 0: 恢复正常飞行逻辑 */
 #define CONFIG_GIMBAL_DEBUG_MODE            1
-#define CONFIG_GIMBAL_DEBUG_MAX_THROTTLE    1280
+#define CONFIG_GIMBAL_DEBUG_MAX_THROTTLE    1380
 #define CONFIG_GIMBAL_DEBUG_MAX_TILT_ANGLE  15.0f
 
 /* 遥控器油门死区（单位：us）*/
