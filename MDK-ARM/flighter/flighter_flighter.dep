@@ -37,7 +37,7 @@ I (../Core/Inc/gpio.h)(0x692557F9)
 I (../Core/Inc/main.h)(0x69378875)
 I (..\User\Delay.h)(0x693B81B3)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -124,7 +124,7 @@ I (../Core/Inc/main.h)(0x69378875)
 I (..\User\Delay.h)(0x693B81B3)
 I (..\User\GY86.h)(0x6940D9A1)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -135,11 +135,11 @@ I (../Middlewares/Third_Party/FreeRTOS/Source/include/task.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/list.h)(0x691EBAB9)
 F (..\User\OLED.h)(0x693B8B52)()
 F (..\User\OLED_Font.h)(0x61683CCA)()
-F (..\User\User Task\uart_task.c)(0x69BE4FAB)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\uart_task.o --omf_browse flighter\uart_task.crf --depend flighter\uart_task.d)
+F (..\User\User Task\uart_task.c)(0x69BF9286)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\uart_task.o --omf_browse flighter\uart_task.crf --depend flighter\uart_task.d)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -186,7 +186,7 @@ I (../Core/Inc/usart.h)(0x69BE406D)
 I (C:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h)(0x691EBAB9)
 I (../Core/Inc/i2c.h)(0x69ACF9F7)
-I (..\User\User Task\getPPM_task.h)(0x69461D1D)
+I (..\User\User Task\getPPM_task.h)(0x69BF91BD)
 I (../User/FlightControl.h)(0x69B8D041)
 I (C:\Keil_v5\ARM\ARMCC\include\stdbool.h)(0x588B8344)
 I (../User/PID/autoconf.h)(0x69BE16CF)
@@ -194,11 +194,11 @@ I (C:\Keil_v5\ARM\ARMCC\include\math.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\string.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x588B8344)
 F (..\User\User Task\uart_task.h)(0x69461051)()
-F (..\User\User Task\getPPM_task.c)(0x69461ED3)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\getppm_task.o --omf_browse flighter\getppm_task.crf --depend flighter\getppm_task.d)
+F (..\User\User Task\getPPM_task.c)(0x69BF91BD)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\getppm_task.o --omf_browse flighter\getppm_task.crf --depend flighter\getppm_task.d)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -246,7 +246,8 @@ I (C:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h)(0x691EBAB9)
 I (../Core/Inc/tim.h)(0x692BB37A)
 I (../Core/Inc/i2c.h)(0x69ACF9F7)
-F (..\User\User Task\getPPM_task.h)(0x69461D1D)()
+I (..\User\User Task\getPPM_task.h)(0x69BF91BD)
+F (..\User\User Task\getPPM_task.h)(0x69BF91BD)()
 F (..\User\User Task\flightcontrol_task.c)(0x69AFD335)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\flightcontrol_task.o --omf_browse flighter\flightcontrol_task.crf --depend flighter\flightcontrol_task.d)
 I (..\User\User Task\flightcontrol_task.h)(0x69AFD335)
 F (..\User\User Task\flightcontrol_task.h)(0x69AFD335)()
@@ -304,13 +305,13 @@ I (C:\Keil_v5\ARM\ARMCC\include\math.h)(0x588B8344)
 I (..\User\PID\num.h)(0x6996BE9B)
 I (C:\Keil_v5\ARM\ARMCC\include\string.h)(0x588B8344)
 F (..\User\AttitudeEstimator.h)(0x698E8526)()
-F (..\User\FlightControl.c)(0x69BE58F1)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\flightcontrol.o --omf_browse flighter\flightcontrol.crf --depend flighter\flightcontrol.d)
+F (..\User\FlightControl.c)(0x69BF96FE)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\flightcontrol.o --omf_browse flighter\flightcontrol.crf --depend flighter\flightcontrol.d)
 I (..\User\FlightControl.h)(0x69B8D041)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdbool.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -420,7 +421,7 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x691EBB2F)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x691EBB2F)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -476,11 +477,11 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x691EBB2F)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x691EBB2F)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x691EBB2F)
 I (../User/Delay.h)(0x693B81B3)
-F (../Core/Src/freertos.c)(0x69BE4088)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\freertos.o --omf_browse flighter\freertos.crf --depend flighter\freertos.d)
+F (../Core/Src/freertos.c)(0x69BFB443)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\freertos.o --omf_browse flighter\freertos.crf --depend flighter\freertos.d)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -532,6 +533,7 @@ I (../Core/Inc/i2c.h)(0x69ACF9F7)
 I (C:/Users/YLWIS/Desktop/Projects/Ëá™Âä®Ë∑üÊãçÊó†‰∫∫Êú∫/stm32/flighter/User/User Task/uart_task.h)(0x00000000)
 I (C:/Users/YLWIS/Desktop/Projects/Ëá™Âä®Ë∑üÊãçÊó†‰∫∫Êú∫/stm32/flighter/User/User Task/getPPM_task.h)(0x00000000)
 I (C:/Users/YLWIS/Desktop/Projects/Ëá™Âä®Ë∑üÊãçÊó†‰∫∫Êú∫/stm32/flighter/User/User Task/flightcontrol_task.h)(0x00000000)
+I (C:/Users/YLWIS/Desktop/Projects/Ëá™Âä®Ë∑üÊãçÊó†‰∫∫Êú∫/stm32/flighter/User/User Task/stackmonitor_task.h)(0x00000000)
 I (C:\Keil_v5\ARM\ARMCC\include\string.h)(0x588B8344)
 F (../Core/Src/dma.c)(0x69BE3F16)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\dma.o --omf_browse flighter\dma.crf --depend flighter\dma.d)
 I (../Core/Inc/dma.h)(0x69428BEB)
@@ -572,7 +574,7 @@ F (../Core/Src/i2c.c)(0x69B4D572)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -656,7 +658,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -801,6 +803,56 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h)(0x691EBB2F)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x691EBB2F)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x691EBB2F)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x691EBB2F)
+F (..\User\User Task\stackmonitor_task.c)(0x69BFB50A)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\stackmonitor_task.o --omf_browse flighter\stackmonitor_task.crf --depend flighter\stackmonitor_task.d)
+I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
+I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
+I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
+I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
+I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
+I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
+I (../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F/portmacro.h)(0x691EBAB9)
+I (../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h)(0x691EBAB9)
+I (..\User\User Task\stackmonitor_task.h)(0x69BFB443)
+I (../Middlewares/Third_Party/FreeRTOS/Source/include/task.h)(0x691EBAB9)
+I (../Middlewares/Third_Party/FreeRTOS/Source/include/list.h)(0x691EBAB9)
+I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h)(0x691EBAB9)
+I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h)(0x691EBAB9)
+I (../Core/Inc/usart.h)(0x69BE406D)
+I (../Core/Inc/main.h)(0x69378875)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h)(0x691EBB2F)
+I (../Core/Inc/stm32f4xx_hal_conf.h)(0x693CE09E)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_def.h)(0x691EBB2F)
+I (../Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f4xx.h)(0x691EBB2F)
+I (../Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f401xe.h)(0x691EBB2F)
+I (../Drivers/CMSIS/Include/core_cm4.h)(0x691EBB2F)
+I (../Drivers/CMSIS/Include/cmsis_version.h)(0x691EBB2F)
+I (../Drivers/CMSIS/Include/cmsis_compiler.h)(0x691EBB2F)
+I (../Drivers/CMSIS/Include/cmsis_armcc.h)(0x691EBB2F)
+I (../Drivers/CMSIS/Include/mpu_armv7.h)(0x691EBB2F)
+I (../Drivers/CMSIS/Device/ST/STM32F4xx/Include/system_stm32f4xx.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy/stm32_hal_legacy.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc_ex.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_gpio.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_gpio_ex.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_exti.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma_ex.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_flash.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_flash_ex.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_flash_ramfunc.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_i2c.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_i2c_ex.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x691EBB2F)
+I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x691EBB2F)
+I (C:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x588B8344)
+I (C:\Keil_v5\ARM\ARMCC\include\string.h)(0x588B8344)
+F (..\User\User Task\stackmonitor_task.h)(0x69BFB443)()
 F (../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c)(0x691EBB2F)(--c99 -c --cpu Cortex-M4.fp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../User -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../User/UserTask -I ../User/PID -I "C:/Users/YLWIS/Desktop/Projects/◊‘∂Ø∏˙≈ƒŒﬁ»Àª˙/stm32/flighter/User/User Task"-I.\RTE\_flighter-IC:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include-IC:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.16.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="524" -D_RTE_ -DSTM32F401xE -DUSE_HAL_DRIVER -DSTM32F401xE-o flighter\stm32f4xx_hal_tim.o --omf_browse flighter\stm32f4xx_hal_tim.crf --depend flighter\stm32f4xx_hal_tim.d)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h)(0x691EBB2F)
 I (../Core/Inc/stm32f4xx_hal_conf.h)(0x693CE09E)
@@ -1432,7 +1484,7 @@ F (../Middlewares/Third_Party/FreeRTOS/Source/croutine.c)(0x691EBAB9)(--c99 -c -
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -1446,7 +1498,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -1461,7 +1513,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -1474,7 +1526,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\string.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -1488,7 +1540,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\string.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -1503,7 +1555,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\string.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -1518,7 +1570,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -1536,7 +1588,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (../Drivers/CMSIS/Include/cmsis_compiler.h)(0x691EBB2F)
 I (../Drivers/CMSIS/Include/cmsis_armcc.h)(0x691EBB2F)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -1583,7 +1635,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x588B8344)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)
@@ -1595,7 +1647,7 @@ F (../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F/port.c)(0x6
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x691EBAB9)
 I (C:\Keil_v5\ARM\ARMCC\include\stddef.h)(0x588B8344)
 I (C:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x588B8344)
-I (../Core/Inc/FreeRTOSConfig.h)(0x693BD7F8)
+I (../Core/Inc/FreeRTOSConfig.h)(0x69BF96E0)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h)(0x691EBAB9)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h)(0x691EBAB9)

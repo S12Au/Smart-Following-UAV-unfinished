@@ -51,3 +51,4 @@ flighter\getppm_task.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
 flighter\getppm_task.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h
 flighter\getppm_task.o: ../Core/Inc/tim.h
 flighter\getppm_task.o: ../Core/Inc/i2c.h
+flighter\getppm_task.o: ..\User\User Task\getPPM_task.h

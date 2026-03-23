@@ -21,6 +21,7 @@
 "flighter\stm32f4xx_it.o"
 "flighter\stm32f4xx_hal_msp.o"
 "flighter\stm32f4xx_hal_timebase_tim.o"
+"flighter\stackmonitor_task.o"
 "flighter\stm32f4xx_hal_tim.o"
 "flighter\stm32f4xx_hal_tim_ex.o"
 "flighter\stm32f4xx_hal_rcc.o"

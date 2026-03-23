@@ -531,7 +531,7 @@ void FlightControl_Init(void)
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
 
-    Motor_Init();
+    //Motor_Init();
         printf("motor ok\r\n");
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_1, CONFIG_MOTOR_MIN_THROTTLE);
     __HAL_TIM_SetCompare(&htim3, TIM_CHANNEL_2, CONFIG_MOTOR_MIN_THROTTLE);
@@ -887,7 +887,6 @@ static void updateArmDisarmCommand(const ControlInput_t* inputRaw,
     {
         if (inputRaw->yaw >= CONFIG_ARM_YAW_HIGH)
         {
-            printf("time:%d\r\n",nowTick - *armCmdStartTick);
             if (*armCmdStartTick == 0)
             {
                 *armCmdStartTick = nowTick;

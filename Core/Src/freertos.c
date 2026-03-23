@@ -35,6 +35,7 @@
 #include "uart_task.h"
 #include "getPPM_task.h"
 #include "flightcontrol_task.h"
+#include "stackmonitor_task.h"
 #include <string.h>
 /* USER CODE END Includes */
 
@@ -56,6 +57,14 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 
+TaskHandle_t g_getGyroAccelTaskHandle = NULL;
+TaskHandle_t g_getMagTaskHandle = NULL;
+TaskHandle_t g_getPressureTaskHandle = NULL;
+TaskHandle_t g_uartDebugTaskHandle = NULL;
+TaskHandle_t g_getPpmTaskHandle = NULL;
+TaskHandle_t g_flightControlTaskHandle = NULL;
+TaskHandle_t g_stackMonitorTaskHandle = NULL;
+
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -76,6 +85,7 @@ void Get_PPM_Task(void *params);
 void Flight_Control_Task(void *params);
 void K230_Control_Task(void *params);
 void USART6_Echo_Test_Task(void *params);
+void Stack_Monitor_Task(void *params);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -107,14 +117,15 @@ void MX_FREERTOS_Init(void) {
   /* start timers, add new ones, ... */
 	
 	/* 传感器采集任务 - 按重要性分配优先级 */
-	xTaskCreate(Get_GYROandACCEL_Task,"Get_GYROandACCEL_Task",128,NULL,osPriorityAboveNormal,NULL);	// 陀螺仪/加速度计：最高（500Hz，姿态控制依赖）
-	xTaskCreate(Get_MAG_Task,"Get_MAG_Task",128,NULL,osPriorityNormal,NULL);							// 磁力计：中等（50Hz，航向参考）
-	xTaskCreate(Get_Pressure_Task,"Get_Pressure_Task",128,NULL,osPriorityBelowNormal,NULL);			// 气压计：最低（25Hz，高度辅助）
+  xTaskCreate(Get_GYROandACCEL_Task,"Get_GYROandACCEL_Task",128,NULL,osPriorityAboveNormal,&g_getGyroAccelTaskHandle);	// 陀螺仪/加速度计：最高（500Hz，姿态控制依赖）
+  xTaskCreate(Get_MAG_Task,"Get_MAG_Task",128,NULL,osPriorityNormal,&g_getMagTaskHandle);									// 磁力计：中等（50Hz，航向参考）
+  xTaskCreate(Get_Pressure_Task,"Get_Pressure_Task",128,NULL,osPriorityBelowNormal,&g_getPressureTaskHandle);				// 气压计：最低（25Hz，高度辅助）
 	
-	xTaskCreate(Uart_Debug_Task,"Uart_Debug_Task",128,NULL,osPriorityBelowNormal,NULL);
-	xTaskCreate(Get_PPM_Task,"Get_PPM_Task",128,NULL,osPriorityNormal,NULL);
+  xTaskCreate(Uart_Debug_Task,"Uart_Debug_Task",512,NULL,osPriorityBelowNormal,&g_uartDebugTaskHandle);
+  xTaskCreate(Get_PPM_Task,"Get_PPM_Task",128,NULL,osPriorityNormal,&g_getPpmTaskHandle);
 	
-	xTaskCreate(Flight_Control_Task,"Flight_Control_Task",256,NULL,osPriorityHigh,NULL);				// 飞行控制：非常高（控制核心）
+  xTaskCreate(Flight_Control_Task,"Flight_Control_Task",512,NULL,osPriorityHigh,&g_flightControlTaskHandle);				// 飞行控制：非常高（控制核心）
+  xTaskCreate(Stack_Monitor_Task,"Stack_Monitor_Task",192,NULL,osPriorityLow,&g_stackMonitorTaskHandle);
 	
 	//xTaskCreate(USART6_Echo_Test_Task,"USART6_Echo_Test_Task",128,NULL,osPriorityNormal,NULL);
   /* USER CODE END RTOS_TIMERS */
@@ -216,6 +227,11 @@ void USART6_Echo_Test_Task(void *params)
     }
     osDelay(1);
   }
+}
+
+void Stack_Monitor_Task(void *params)
+{
+  StackMonitor_Task(params);
 }
 /* USER CODE END Application */
 
