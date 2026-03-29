@@ -125,7 +125,7 @@ void MX_FREERTOS_Init(void) {
   xTaskCreate(Get_PPM_Task,"Get_PPM_Task",128,NULL,osPriorityNormal,&g_getPpmTaskHandle);
 	
   xTaskCreate(Flight_Control_Task,"Flight_Control_Task",512,NULL,osPriorityHigh,&g_flightControlTaskHandle);				// 飞行控制：非常高（控制核心）
-  xTaskCreate(Stack_Monitor_Task,"Stack_Monitor_Task",192,NULL,osPriorityLow,&g_stackMonitorTaskHandle);
+  //xTaskCreate(Stack_Monitor_Task,"Stack_Monitor_Task",192,NULL,osPriorityLow,&g_stackMonitorTaskHandle);
 	
 	//xTaskCreate(USART6_Echo_Test_Task,"USART6_Echo_Test_Task",128,NULL,osPriorityNormal,NULL);
   /* USER CODE END RTOS_TIMERS */

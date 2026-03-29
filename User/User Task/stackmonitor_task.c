@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define STACK_MONITOR_PERIOD_MS        1000u
+#define STACK_MONITOR_PERIOD_MS        3000u
 #define STACK_MONITOR_SNAPSHOT_DIV     5u
 #define STACK_WATERMARK_ALERT_WORDS    32u
 

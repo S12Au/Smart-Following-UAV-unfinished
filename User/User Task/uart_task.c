@@ -18,10 +18,10 @@
 #define UART1_RX_RING_SIZE 256u
 #define UART1_RX_DMA_BUF_SIZE 64u
 
-static volatile uint8_t s_uart1RxRing[UART1_RX_RING_SIZE];
-static volatile uint16_t s_uart1RxHead = 0;
-static volatile uint16_t s_uart1RxTail = 0;
-static volatile uint8_t s_uart1RxOverflow = 0;
+static volatile uint8_t s_uart1RxRing[UART1_RX_RING_SIZE]; // UART1 接收环形缓冲区
+static volatile uint16_t s_uart1RxHead = 0;                // 写指针（DMA 回调推进）
+static volatile uint16_t s_uart1RxTail = 0;                // 读指针（任务上下文推进）
+static volatile uint8_t s_uart1RxOverflow = 0;             // 溢出标志（环形缓冲写满）
 static uint8_t s_uart1RxDmaBuf[UART1_RX_DMA_BUF_SIZE];
 static volatile uint8_t s_uart1RxDmaStarted = 0u;
 
@@ -59,7 +59,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t Size)
 				s_uart1RxOverflow = 1u;
 			}
 		}
-
 		s_uart1RxDmaStarted = 0u;
 		uart1RxStartDma();
 	}
@@ -210,6 +209,11 @@ static void printPidAll(void)
 	printf("PID,END\r\n");
 }
 
+/**
+ * @brief 处理 UART 命令
+ * @param line 输入命令行字符串，末尾不包含换行符
+ * @note 该函数会被 processUartRx() 调用，以处理解析后的命令行
+ */
 static void handleUartCommand(char* line)
 {
 	char* cmd;
@@ -383,11 +387,11 @@ void Uart_Send_Task()
 
 		FlightControl_GetDebugSnapshot(&dbg);
 		
-		printf("%.2f %.2f %.2f %u\r\n", dbg.pitch, dbg.roll, dbg.yaw, dbg.throttle);
-
+		printf("%u %u %u %u\r\n", dbg.m1, dbg.m2, dbg.m3, dbg.m4);
+		//printf("%.2f %.2f %.2f\r\n", dbg.roll, dbg.pitch, dbg.yaw);
 		
 		//vTaskDelayUntil(&xLastWakeTime, xPeriod);
-		vTaskDelay(pdMS_TO_TICKS(1000));
+		vTaskDelay(pdMS_TO_TICKS(50));
 		
 	}
 	
