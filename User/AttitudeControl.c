@@ -5,7 +5,10 @@
 #include "tim.h"
 
 #define RC_MID              1500.0f
+#define RC_CENTER_TRIM_US       0.0f
 #define RC_SCALE            500.0f
+#define RC_DEADBAND_US        5.0f
+#define RATE_ERR_DEADBAND      0.15f
 #define MOTOR_MIN           CONFIG_MOTOR_MIN_THROTTLE
 #define MOTOR_MAX           CONFIG_MOTOR_MAX_THROTTLE
 #define MOTOR_IDLE          CONFIG_MOTOR_IDLE_THROTTLE
@@ -36,7 +39,23 @@ static const PidProfileParam_t g_pidProfiles[] = {
 
 static inline float rcNormalize(uint16_t rc)
 {
-    return constrain(((float)rc - RC_MID) / RC_SCALE, -1.0f, 1.0f);
+    float delta = (float)rc - (RC_MID + RC_CENTER_TRIM_US);
+
+    if (delta > -RC_DEADBAND_US && delta < RC_DEADBAND_US)
+    {
+        return 0.0f;
+    }
+
+    if (delta > 0.0f)
+    {
+        delta -= RC_DEADBAND_US;
+    }
+    else
+    {
+        delta += RC_DEADBAND_US;
+    }
+
+    return constrain(delta / (RC_SCALE - RC_DEADBAND_US), -1.0f, 1.0f);
 }
 
 void AttitudeController_Init(AttitudeController_t* ctrl, float dt)
@@ -61,18 +80,27 @@ void AttitudeController_Init(AttitudeController_t* ctrl, float dt)
 
         pidInit(&ctrl->rollRatePid, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
             dt, 1.0f / dt, 60.0f, true);
-    pidSetIntegralLimit(&ctrl->rollRatePid, 200.0f);
+    pidSetIntegralLimit(&ctrl->rollRatePid, 300.0f);
     ctrl->rollRatePid.outputLimit = 350.0f;
+    ctrl->rollRatePid.enableErrorDeadzone = true;
+    ctrl->rollRatePid.errorDeadzone = RATE_ERR_DEADBAND;
 
         pidInit(&ctrl->pitchRatePid, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
             dt, 1.0f / dt, 60.0f, true);
-    pidSetIntegralLimit(&ctrl->pitchRatePid, 200.0f);
+    pidSetIntegralLimit(&ctrl->pitchRatePid, 300.0f);
     ctrl->pitchRatePid.outputLimit = 350.0f;
+    ctrl->pitchRatePid.enableErrorDeadzone = true;
+    ctrl->pitchRatePid.errorDeadzone = RATE_ERR_DEADBAND;
 
         pidInit(&ctrl->yawRatePid, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
             dt, 1.0f / dt, 30.0f, true);
     pidSetIntegralLimit(&ctrl->yawRatePid, 100.0f);
     ctrl->yawRatePid.outputLimit = 200.0f;
+    ctrl->yawRatePid.enableErrorDeadzone = true;
+    ctrl->yawRatePid.errorDeadzone = RATE_ERR_DEADBAND;
+
+    /* PIDDBG仅输出横滚角外环数据 */
+    pidSetDebugTarget(&ctrl->rollRatePid);
 
         AttitudeController_LoadProfile(ctrl, (PidProfile_t)CONFIG_PID_PROFILE_DEFAULT);
 
@@ -140,7 +168,7 @@ void AttitudeController_Reset(AttitudeController_t* ctrl, const AttitudeState_t*
     ctrl->yawOut = 0.0f;
 }
 
-void AttitudeController_GenerateSetpoint(const ControlInput_t* input, AttitudeSetpoint_t* sp)
+void AttitudeController_GenerateSetpoint(const ControlInput_t* input, AttitudeSetpoint_t* sp, bool isAcro)
 {
     if (input == NULL || sp == NULL)
     {
@@ -151,8 +179,18 @@ void AttitudeController_GenerateSetpoint(const ControlInput_t* input, AttitudeSe
     float pitchIn = rcNormalize(input->forward);
     float yawIn = rcNormalize(input->yaw);
 
-    sp->roll = rollIn * CONFIG_MAX_ROLL_ANGLE;
-    sp->pitch = -pitchIn * CONFIG_MAX_PITCH_ANGLE;
+    if (isAcro)
+    {
+        /* 角速度模式：摇杆直接映射为角速度设定点。 */
+        sp->roll = rollIn * CONFIG_MAX_ROLL_RATE;
+        sp->pitch = -pitchIn * CONFIG_MAX_PITCH_RATE;
+    }
+    else
+    {
+        /* 角度模式：摇杆映射为姿态角设定点，由外环产生角速度目标。 */
+        sp->roll = rollIn * CONFIG_MAX_ROLL_ANGLE;
+        sp->pitch = -pitchIn * CONFIG_MAX_PITCH_ANGLE;
+    }
     sp->yawRate = yawIn * CONFIG_MAX_YAW_RATE;
 }
 
@@ -208,11 +246,13 @@ void AttitudeController_MixToMotor(const AttitudeController_t* ctrl,
     }
 
     float t = (float)throttle;
+    /* Reverse yaw mixing direction to match the actual motor/prop rotation mapping. */
+    float yawMix = -ctrl->yawOut;
 
-    float m1 = t + ctrl->rollOut + ctrl->pitchOut - ctrl->yawOut;
-    float m2 = t - ctrl->rollOut + ctrl->pitchOut + ctrl->yawOut;
-    float m3 = t - ctrl->rollOut - ctrl->pitchOut - ctrl->yawOut;
-    float m4 = t + ctrl->rollOut - ctrl->pitchOut + ctrl->yawOut;
+    float m1 = t + ctrl->rollOut + ctrl->pitchOut - yawMix;
+    float m2 = t - ctrl->rollOut + ctrl->pitchOut + yawMix;
+    float m3 = t - ctrl->rollOut - ctrl->pitchOut - yawMix;
+    float m4 = t + ctrl->rollOut - ctrl->pitchOut + yawMix;
 
     if (throttle < CONFIG_THROTTLE_MIN)
     {

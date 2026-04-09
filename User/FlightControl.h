@@ -26,9 +26,15 @@ typedef struct
 	float pitch;
 	float yaw;
 
+	float rollRate;         /* 横滚角速度实际值 deg/s */
+	float pitchRate;        /* 俯仰角速度实际值 deg/s */
+	float yawRate;          /* 偏航角速度实际值 deg/s */
+
 	float rollSp;			/* 横滚角设定点（目标值） */
 	float pitchSp;			/* 俯仰角设定点（目标值） */
 	float yawRateSp;		/* 角速度设定点（目标值） */
+	float rollRateSp;       /* 横滚角速度设定点（目标值） */
+	float pitchRateSp;      /* 俯仰角速度设定点（目标值） */
 	
 	float rollOut;			/* 横滚通道最终PID输出（用于电机混控） */
 	float pitchOut;			/* 俯仰通道最终PID输出（用于电机混控） */
@@ -59,6 +65,12 @@ typedef enum
 	FLIGHT_GAIN_KD
 } FlightGainType_t;
 
+typedef enum
+{
+	FLIGHT_LIMIT_INTEGRAL = 0,
+	FLIGHT_LIMIT_OUTPUT
+} FlightLimitType_t;
+
 /**
  * @brief PID参数设置错误码
  */
@@ -77,6 +89,8 @@ void FlightControl_NotifyImuSampleReady(void);
 void FlightControl_GetDebugSnapshot(FlightDebugData_t* out);
 bool FlightControl_SetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, float value);
 bool FlightControl_GetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, float* outValue);
+bool FlightControl_SetPidLimit(FlightPidId_t pidId, FlightLimitType_t limitType, float value);
+bool FlightControl_GetPidLimit(FlightPidId_t pidId, FlightLimitType_t limitType, float* outValue);
 FlightPidSetError_t FlightControl_GetLastPidSetError(void);
 
 #endif /* FLIGHT_CONTROL_H_ */

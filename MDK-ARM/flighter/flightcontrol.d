@@ -14,7 +14,7 @@ flighter\flightcontrol.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/tas
 flighter\flightcontrol.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h
 flighter\flightcontrol.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h
 flighter\flightcontrol.o: ..\User\GY86.h
-flighter\flightcontrol.o: C:/Users/YLWIS/Desktop/Projects/自动跟拍无人机/stm32/flighter/User/User Task/getPPM_task.h
+flighter\flightcontrol.o: ..\User\User Task\getPPM_task.h
 flighter\flightcontrol.o: ..\User\AttitudeEstimator.h
 flighter\flightcontrol.o: ..\User\AttitudeControl.h
 flighter\flightcontrol.o: ../User/PID/pid.h

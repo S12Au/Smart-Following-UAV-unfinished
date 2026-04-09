@@ -20,7 +20,8 @@
 #define FC_OUTER_LOOP_DIV  (CONFIG_CONTROLLER_RATE_HZ / CONFIG_OUTER_LOOP_RATE_HZ)
 #define PID_FLASH_ADDR       0x08060000U
 #define PID_FLASH_MAGIC      0x50494431U
-#define PID_FLASH_VERSION    0x00010000U
+#define PID_FLASH_VERSION_V1 0x00010000U
+#define PID_FLASH_VERSION    0x00010001U
 #define RC_FILTER_ALPHA      0.20f
 #define IMU_DROP_STAT_WINDOW_CYCLES ((uint16_t)CONFIG_CONTROLLER_RATE_HZ)
 #define IMU_CTRL_SCALE_STALE         0.40f
@@ -44,10 +45,20 @@ typedef enum
 typedef struct
 {
     uint32_t magic;       // 魔数标识（0x50494431U），用于验证 Flash 中 PID 数据的有效性
-    uint32_t version;     // 版本号（0x00010000U），用于管理 PID 参数格式的版本兼容性
+    uint32_t version;     // 版本号（0x00010001U），用于管理 PID 参数格式的版本兼容性
     float gains[FLIGHT_PID_COUNT][3];  // PID 增益参数数组 [通道数][3]，存储 P/I/D 三参数（单位：比例系数）
+    float iLimits[FLIGHT_PID_COUNT];    // PID 积分限幅
+    float outputLimits[FLIGHT_PID_COUNT]; // PID 总输出限幅
     uint32_t checksum;    // 校验和，用于验证 Flash 中 PID 数据的完整性（防止数据损坏）
 } FlightPidPersist_t;
+
+typedef struct
+{
+    uint32_t magic;
+    uint32_t version;
+    float gains[FLIGHT_PID_COUNT][3];
+    uint32_t checksum;
+} FlightPidPersistV1_t;
 
 /* ========== 飞控核心模块实例 ========== */
 static AttitudeEstimator_t g_estimator;    // Mahony姿态估计器（融合 IMU 数据解算姿态）
@@ -84,11 +95,40 @@ static uint16_t g_calibCount = 0;          // 校准采样计数器
  */
 static uint32_t calcPersistChecksum(const FlightPidPersist_t* data)
 {
-    const uint8_t* bytes = (const uint8_t*)data;
+    const uint8_t* bytes;
     uint32_t sum = 0xA5A5A5A5U;
     uint32_t i;
 
+    if (data == 0)
+    {
+        return 0U;
+    }
+
+    bytes = (const uint8_t*)data;
+
     for (i = 0; i < (uint32_t)(sizeof(FlightPidPersist_t) - sizeof(uint32_t)); i++)
+    {
+        sum ^= bytes[i];
+        sum = (sum << 5) | (sum >> 27);
+        sum += 0x9E3779B9U;
+    }
+
+    return sum;
+}
+
+static uint32_t calcPersistChecksumV1(const FlightPidPersistV1_t* data)
+{
+    const uint8_t* bytes;
+    uint32_t sum = 0xA5A5A5A5U;
+    uint32_t i;
+
+    if (data == 0)
+    {
+        return 0U;
+    }
+
+    bytes = (const uint8_t*)data;
+    for (i = 0; i < (uint32_t)(sizeof(FlightPidPersistV1_t) - sizeof(uint32_t)); i++)
     {
         sum ^= bytes[i];
         sum = (sum << 5) | (sum >> 27);
@@ -232,6 +272,65 @@ static bool setPidGainInternal(FlightPidId_t pidId, FlightGainType_t gainType, f
     }
 }
 
+static bool setPidLimitInternal(FlightPidId_t pidId, FlightLimitType_t limitType, float value)
+{
+    PidObject* pid = getPidObjectById(pidId);
+
+    if (pid == 0)
+    {
+        return false;
+    }
+
+    if (!isfinite(value) || value < 0.0f)
+    {
+        return false;
+    }
+
+    switch (limitType)
+    {
+        case FLIGHT_LIMIT_INTEGRAL:
+            pid->iLimit = value;
+            return true;
+        case FLIGHT_LIMIT_OUTPUT:
+            pid->outputLimit = value;
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool fillPersistFromCurrent(FlightPidPersist_t* data)
+{
+    uint32_t i;
+    PidObject* pid;
+
+    if (data == 0)
+    {
+        return false;
+    }
+
+    memset(data, 0, sizeof(*data));
+    data->magic = PID_FLASH_MAGIC;
+    data->version = PID_FLASH_VERSION;
+
+    for (i = 0; i < (uint32_t)FLIGHT_PID_COUNT; i++)
+    {
+        pid = getPidObjectById((FlightPidId_t)i);
+        if (pid == 0)
+        {
+            return false;
+        }
+
+        data->gains[i][FLIGHT_GAIN_KP] = pid->kp;
+        data->gains[i][FLIGHT_GAIN_KI] = pid->ki;
+        data->gains[i][FLIGHT_GAIN_KD] = pid->kd;
+        data->iLimits[i] = pid->iLimit;
+        data->outputLimits[i] = pid->outputLimit;
+    }
+
+    return true;
+}
+
 /**
  * @brief 保存 PID 参数到 Flash
  * @return 成功保存则返回 true，否则返回 false
@@ -291,35 +390,75 @@ static bool savePidParamsToFlash(const FlightPidPersist_t* data)
 static bool loadPidParamsFromFlash(void)
 {
     const FlightPidPersist_t* data = (const FlightPidPersist_t*)PID_FLASH_ADDR;
+    const FlightPidPersistV1_t* dataV1 = (const FlightPidPersistV1_t*)PID_FLASH_ADDR;
     uint32_t i;
 
-    if (data->magic != PID_FLASH_MAGIC || data->version != PID_FLASH_VERSION)
+    if (data->magic != PID_FLASH_MAGIC)
     {
         return false;
     }
 
-    if (data->checksum != calcPersistChecksum(data))
+    if (data->version == PID_FLASH_VERSION)
     {
-        return false;
-    } 
+        if (data->checksum != calcPersistChecksum(data))
+        {
+            return false;
+        }
 
-    for (i = 0; i < (uint32_t)FLIGHT_PID_COUNT; i++)
-    {
-        if (!setPidGainInternal((FlightPidId_t)i, FLIGHT_GAIN_KP, data->gains[i][FLIGHT_GAIN_KP]))
+        for (i = 0; i < (uint32_t)FLIGHT_PID_COUNT; i++)
         {
-            return false;
+            if (!setPidGainInternal((FlightPidId_t)i, FLIGHT_GAIN_KP, data->gains[i][FLIGHT_GAIN_KP]))
+            {
+                return false;
+            }
+            if (!setPidGainInternal((FlightPidId_t)i, FLIGHT_GAIN_KI, data->gains[i][FLIGHT_GAIN_KI]))
+            {
+                return false;
+            }
+            if (!setPidGainInternal((FlightPidId_t)i, FLIGHT_GAIN_KD, data->gains[i][FLIGHT_GAIN_KD]))
+            {
+                return false;
+            }
+            if (!setPidLimitInternal((FlightPidId_t)i, FLIGHT_LIMIT_INTEGRAL, data->iLimits[i]))
+            {
+                return false;
+            }
+            if (!setPidLimitInternal((FlightPidId_t)i, FLIGHT_LIMIT_OUTPUT, data->outputLimits[i]))
+            {
+                return false;
+            }
         }
-        if (!setPidGainInternal((FlightPidId_t)i, FLIGHT_GAIN_KI, data->gains[i][FLIGHT_GAIN_KI]))
-        {
-            return false;
-        }
-        if (!setPidGainInternal((FlightPidId_t)i, FLIGHT_GAIN_KD, data->gains[i][FLIGHT_GAIN_KD]))
-        {
-            return false;
-        }
+
+        return true;
     }
 
-    return true;
+    if (dataV1->version == PID_FLASH_VERSION_V1)
+    {
+        if (dataV1->checksum != calcPersistChecksumV1(dataV1))
+        {
+            return false;
+        }
+
+        for (i = 0; i < (uint32_t)FLIGHT_PID_COUNT; i++)
+        {
+            if (!setPidGainInternal((FlightPidId_t)i, FLIGHT_GAIN_KP, dataV1->gains[i][FLIGHT_GAIN_KP]))
+            {
+                return false;
+            }
+            if (!setPidGainInternal((FlightPidId_t)i, FLIGHT_GAIN_KI, dataV1->gains[i][FLIGHT_GAIN_KI]))
+            {
+                return false;
+            }
+            if (!setPidGainInternal((FlightPidId_t)i, FLIGHT_GAIN_KD, dataV1->gains[i][FLIGHT_GAIN_KD]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 static float pressureToAltitudeM(float pressurePa, float refPressurePa)
@@ -595,8 +734,6 @@ void FlightControl_NotifyImuSampleReady(void)
 bool FlightControl_SetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, float value)
 {
     FlightPidPersist_t data;
-    PidObject* pid;
-    uint32_t i;
 
     g_lastPidSetError = FLIGHT_PID_SET_OK;
 
@@ -613,27 +750,15 @@ bool FlightControl_SetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, fl
         return false;
     }
 
-    memset(&data, 0, sizeof(data));
-    data.magic = PID_FLASH_MAGIC;
-    data.version = PID_FLASH_VERSION;
-
-    for (i = 0; i < (uint32_t)FLIGHT_PID_COUNT; i++)
-    {
-        pid = getPidObjectById((FlightPidId_t)i);
-        if (pid == 0)
-        {
-            g_lastPidSetError = FLIGHT_PID_SET_ERR_INTERNAL;
-            return false;
-        }
-
-        data.gains[i][FLIGHT_GAIN_KP] = pid->kp;
-        data.gains[i][FLIGHT_GAIN_KI] = pid->ki;
-        data.gains[i][FLIGHT_GAIN_KD] = pid->kd;
-    }
-
     if ((uint32_t)pidId >= (uint32_t)FLIGHT_PID_COUNT || (uint32_t)gainType > (uint32_t)FLIGHT_GAIN_KD)
     {
         g_lastPidSetError = FLIGHT_PID_SET_ERR_INVALID_INPUT;
+        return false;
+    }
+
+    if (!fillPersistFromCurrent(&data))
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_INTERNAL;
         return false;
     }
 
@@ -686,6 +811,85 @@ bool FlightControl_GetPidGain(FlightPidId_t pidId, FlightGainType_t gainType, fl
             return true;
         case FLIGHT_GAIN_KD:
             *outValue = pid->kd;
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool FlightControl_SetPidLimit(FlightPidId_t pidId, FlightLimitType_t limitType, float value)
+{
+    FlightPidPersist_t data;
+
+    g_lastPidSetError = FLIGHT_PID_SET_OK;
+
+    /* 与 PID 增益调参保持同一安全策略：仅允许在 DISARMED 状态修改。 */
+    if (g_flightState != FLIGHT_STATE_DISARMED)
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_NOT_DISARMED;
+        return false;
+    }
+
+    if (!isfinite(value) || value < 0.0f)
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_INVALID_INPUT;
+        return false;
+    }
+
+    if ((uint32_t)pidId >= (uint32_t)FLIGHT_PID_COUNT || (uint32_t)limitType > (uint32_t)FLIGHT_LIMIT_OUTPUT)
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_INVALID_INPUT;
+        return false;
+    }
+
+    if (!fillPersistFromCurrent(&data))
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_INTERNAL;
+        return false;
+    }
+
+    if (limitType == FLIGHT_LIMIT_INTEGRAL)
+    {
+        data.iLimits[pidId] = value;
+    }
+    else
+    {
+        data.outputLimits[pidId] = value;
+    }
+
+    data.checksum = calcPersistChecksum(&data);
+
+    if (!savePidParamsToFlash(&data))
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_FLASH_WRITE;
+        return false;
+    }
+
+    if (!setPidLimitInternal(pidId, limitType, value))
+    {
+        g_lastPidSetError = FLIGHT_PID_SET_ERR_INTERNAL;
+        return false;
+    }
+
+    return true;
+}
+
+bool FlightControl_GetPidLimit(FlightPidId_t pidId, FlightLimitType_t limitType, float* outValue)
+{
+    PidObject* pid = getPidObjectById(pidId);
+
+    if (pid == 0 || outValue == 0)
+    {
+        return false;
+    }
+
+    switch (limitType)
+    {
+        case FLIGHT_LIMIT_INTEGRAL:
+            *outValue = pid->iLimit;
+            return true;
+        case FLIGHT_LIMIT_OUTPUT:
+            *outValue = pid->outputLimit;
             return true;
         default:
             return false;
@@ -885,8 +1089,9 @@ static void updateArmDisarmCommand(const ControlInput_t* inputRaw,
 
     if (inputRaw->lift <= CONFIG_THROTTLE_MIN)
     {
-        if (inputRaw->yaw >= CONFIG_ARM_YAW_HIGH)
+        if (inputRaw->yaw <= CONFIG_DISARM_YAW_LOW)
         {
+            //printf("%d\r\n", nowTick - *armCmdStartTick);
             if (*armCmdStartTick == 0)
             {
                 *armCmdStartTick = nowTick;
@@ -905,7 +1110,7 @@ static void updateArmDisarmCommand(const ControlInput_t* inputRaw,
             *armCmdStartTick = 0;
         }
 
-        if (inputRaw->yaw <= CONFIG_DISARM_YAW_LOW)
+        if (inputRaw->yaw >= CONFIG_ARM_YAW_HIGH)
         {
             if (*disarmCmdStartTick == 0)
             {
@@ -955,9 +1160,14 @@ static void applyDisarmedBehavior(const AttitudeState_t* state, float altitudeM,
     g_debug.rollSp = 0.0f;
     g_debug.pitchSp = 0.0f;
     g_debug.yawRateSp = 0.0f;
+    g_debug.rollRateSp = 0.0f;
+    g_debug.pitchRateSp = 0.0f;
     g_debug.rollOut = 0.0f;
     g_debug.pitchOut = 0.0f;
     g_debug.yawOut = 0.0f;
+    g_debug.rollRate = 0.0f;
+    g_debug.pitchRate = 0.0f;
+    g_debug.yawRate = 0.0f;
 }
 
 /**
@@ -1098,6 +1308,8 @@ static float applyImuFreshnessControl(ImuFreshness_t imuFreshness,
 void FlightControl_TaskImpl(void* params)
 {
     (void)params;
+
+    const bool isAcro = (CONFIG_DEFAULT_FLIGHT_MODE == CONFIG_FLIGHT_MODE_RATE);
 
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xPeriod = pdMS_TO_TICKS(FC_DT_MS); /* 内环 500Hz */
@@ -1275,10 +1487,10 @@ void FlightControl_TaskImpl(void* params)
             {
                 ppmLast = ppmRaw;
                 ppmSeen = 1;
-                inputRaw.lateral = ppmRaw.ppmCh[0];
+                inputRaw.lateral = invertPpmChannelU16(ppmRaw.ppmCh[0]);
                 inputRaw.forward = invertPpmChannelU16(ppmRaw.ppmCh[1]);
                 inputRaw.lift = invertPpmChannelU16(ppmRaw.ppmCh[2]);
-                inputRaw.yaw = ppmRaw.ppmCh[3];
+                inputRaw.yaw = invertPpmChannelU16(ppmRaw.ppmCh[3]);
                 lastPpmTick = nowTick;
             }
         }
@@ -1286,10 +1498,10 @@ void FlightControl_TaskImpl(void* params)
         {
             /* 遥控队列无新数据时沿用上一帧通道值。 */
             ppmRaw = ppmLast;
-            inputRaw.lateral = ppmRaw.ppmCh[0];
+            inputRaw.lateral = invertPpmChannelU16(ppmRaw.ppmCh[0]);
             inputRaw.forward = invertPpmChannelU16(ppmRaw.ppmCh[1]);
             inputRaw.lift = invertPpmChannelU16(ppmRaw.ppmCh[2]);
-            inputRaw.yaw = ppmRaw.ppmCh[3];
+            inputRaw.yaw = invertPpmChannelU16(ppmRaw.ppmCh[3]);
         }
 
         input.lateral = lowPassChannelU16(input.lateral, inputRaw.lateral, RC_FILTER_ALPHA);
@@ -1311,29 +1523,31 @@ void FlightControl_TaskImpl(void* params)
         {
             float imuCtrlScale = 1.0f;
 
-            AttitudeController_GenerateSetpoint(&input, &sp);
+            AttitudeController_GenerateSetpoint(&input, &sp, isAcro);
 
 #if CONFIG_GIMBAL_DEBUG_MODE
-            sp.roll = constrain(sp.roll,
-                                -g_debugTiltAngleLimitDeg,
-                                g_debugTiltAngleLimitDeg);
-            sp.pitch = constrain(sp.pitch,
-                                 -g_debugTiltAngleLimitDeg,
-                                 g_debugTiltAngleLimitDeg);
+            /* 调试保护的倾角限幅仅适用于角度模式。角速度模式的限幅由 CONFIG_MAX_*_RATE 控制。 */
+            if (!isAcro)
+            {
+                sp.roll = constrain(sp.roll,
+                                    -g_debugTiltAngleLimitDeg,
+                                    g_debugTiltAngleLimitDeg);
+                sp.pitch = constrain(sp.pitch,
+                                     -g_debugTiltAngleLimitDeg,
+                                     g_debugTiltAngleLimitDeg);
+            }
 #endif
 
             updateAltitudeHoldThrottle(&input, altitudeM, pressureValid, &throttleCmd);
             updateYawSetpoint(&input, &state, &yawTargetDeg, &sp);
-            imuCtrlScale = applyImuFreshnessControl(imuFreshness,
-                                                    imuFreshnessPrev,
-                                                    &state,
-                                                    &throttleCmd);
+            imuCtrlScale = applyImuFreshnessControl(imuFreshness, imuFreshnessPrev,
+                                &state, &throttleCmd);
 
             sp.roll *= imuCtrlScale;
             sp.pitch *= imuCtrlScale;
             sp.yawRate *= imuCtrlScale;
 
-            AttitudeController_Update(&g_controller, &sp, &state, false, (updateOuterLoop != 0));
+            AttitudeController_Update(&g_controller, &sp, &state, isAcro, (updateOuterLoop != 0));
             AttitudeController_MixToMotor(&g_controller, throttleCmd, &motor);
             clampMotorOutputForDebug(&motor);
             Motor_WriteOutput(&motor);
@@ -1341,6 +1555,8 @@ void FlightControl_TaskImpl(void* params)
             g_debug.rollSp = sp.roll;
             g_debug.pitchSp = sp.pitch;
             g_debug.yawRateSp = sp.yawRate;
+            g_debug.rollRateSp = g_controller.rollRateSp;
+            g_debug.pitchRateSp = g_controller.pitchRateSp;
             g_debug.rollOut = g_controller.rollOut;
             g_debug.pitchOut = g_controller.pitchOut;
             g_debug.yawOut = g_controller.yawOut;
@@ -1357,6 +1573,9 @@ void FlightControl_TaskImpl(void* params)
         g_debug.roll = state.roll;
         g_debug.pitch = state.pitch;
         g_debug.yaw = state.yaw;
+        g_debug.rollRate = state.rollRate;
+        g_debug.pitchRate = state.pitchRate;
+        g_debug.yawRate = state.yawRate;
         g_debug.throttle = throttleCmd;
 
         imuFreshnessPrev = imuFreshness;

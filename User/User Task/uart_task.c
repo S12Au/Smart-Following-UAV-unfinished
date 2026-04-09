@@ -169,6 +169,22 @@ static int parseGainType(const char* s, FlightGainType_t* out)
 	return 0;
 }
 
+static int parseLimitType(const char* s, FlightLimitType_t* out)
+{
+	if (tokenEquals(s, "ilim") || tokenEquals(s, "int") || tokenEquals(s, "integral"))
+	{
+		*out = FLIGHT_LIMIT_INTEGRAL;
+		return 1;
+	}
+	if (tokenEquals(s, "olim") || tokenEquals(s, "out") || tokenEquals(s, "output"))
+	{
+		*out = FLIGHT_LIMIT_OUTPUT;
+		return 1;
+	}
+
+	return 0;
+}
+
 static const char* pidName(FlightPidId_t id)
 {
 	switch (id)
@@ -201,10 +217,14 @@ static void printPidAll(void)
 		float kp = 0.0f;
 		float ki = 0.0f;
 		float kd = 0.0f;
+		float ilim = 0.0f;
+		float olim = 0.0f;
 		FlightControl_GetPidGain(ids[i], FLIGHT_GAIN_KP, &kp);
 		FlightControl_GetPidGain(ids[i], FLIGHT_GAIN_KI, &ki);
 		FlightControl_GetPidGain(ids[i], FLIGHT_GAIN_KD, &kd);
-		printf("PID,%s,KP=%.5f,KI=%.5f,KD=%.5f\r\n", pidName(ids[i]), kp, ki, kd);
+		FlightControl_GetPidLimit(ids[i], FLIGHT_LIMIT_INTEGRAL, &ilim);
+		FlightControl_GetPidLimit(ids[i], FLIGHT_LIMIT_OUTPUT, &olim);
+		printf("PID,%s,KP=%.5f,KI=%.5f,KD=%.5f,ILIM=%.5f,OLIM=%.5f\r\n", pidName(ids[i]), kp, ki, kd, ilim, olim);
 	}
 	printf("PID,END\r\n");
 }
@@ -236,7 +256,7 @@ static void handleUartCommand(char* line)
 	arg1 = strtok(0, " \t");
 	if (arg1 == 0)
 	{
-		printf("PID,ERR,usage: pid show | pid set <ra|pa|rr|pr|yr|alt> <kp|ki|kd> <value>\r\n");
+		printf("PID,ERR,usage: pid show | pid set <ra|pa|rr|pr|yr|alt> <kp|ki|kd|ilim|olim> <value>\r\n");
 		return;
 	}
 
@@ -250,6 +270,7 @@ static void handleUartCommand(char* line)
 	{
 		FlightPidId_t pidId;
 		FlightGainType_t gainType;
+		FlightLimitType_t limitType;
 		float value;
 
 		arg2 = strtok(0, " \t");
@@ -258,19 +279,13 @@ static void handleUartCommand(char* line)
 
 		if (arg2 == 0 || arg3 == 0 || arg4 == 0)
 		{
-			printf("PID,ERR,usage: pid set <ra|pa|rr|pr|yr|alt> <kp|ki|kd> <value>\r\n");
+			printf("PID,ERR,usage: pid set <ra|pa|rr|pr|yr|alt> <kp|ki|kd|ilim|olim> <value>\r\n");
 			return;
 		}
 
 		if (!parsePidId(arg2, &pidId))
 		{
 			printf("PID,ERR,unknown pid id\r\n");
-			return;
-		}
-
-		if (!parseGainType(arg3, &gainType))
-		{
-			printf("PID,ERR,unknown gain type\r\n");
 			return;
 		}
 
@@ -281,38 +296,78 @@ static void handleUartCommand(char* line)
 			return;
 		}
 
-		if (!FlightControl_SetPidGain(pidId, gainType, value))
+		if (parseGainType(arg3, &gainType))
 		{
-			FlightPidSetError_t err = FlightControl_GetLastPidSetError();
-
-			switch (err)
+			if (!FlightControl_SetPidGain(pidId, gainType, value))
 			{
-				case FLIGHT_PID_SET_ERR_NOT_DISARMED:
-					printf("PID,ERR,forbidden:not_disarmed\r\n");
-					break;
-				case FLIGHT_PID_SET_ERR_FLASH_WRITE:
-					printf("PID,ERR,flash_write_failed\r\n");
-					break;
-				case FLIGHT_PID_SET_ERR_INVALID_INPUT:
-					printf("PID,ERR,invalid_input\r\n");
-					break;
-				default:
-					printf("PID,ERR,set failed\r\n");
-					break;
+				FlightPidSetError_t err = FlightControl_GetLastPidSetError();
+
+				switch (err)
+				{
+					case FLIGHT_PID_SET_ERR_NOT_DISARMED:
+						printf("PID,ERR,forbidden:not_disarmed\r\n");
+						break;
+					case FLIGHT_PID_SET_ERR_FLASH_WRITE:
+						printf("PID,ERR,flash_write_failed\r\n");
+						break;
+					case FLIGHT_PID_SET_ERR_INVALID_INPUT:
+						printf("PID,ERR,invalid_input\r\n");
+						break;
+					default:
+						printf("PID,ERR,set failed\r\n");
+						break;
+				}
+				return;
 			}
+
+			{
+				float kp = 0.0f;
+				float ki = 0.0f;
+				float kd = 0.0f;
+				FlightControl_GetPidGain(pidId, FLIGHT_GAIN_KP, &kp);
+				FlightControl_GetPidGain(pidId, FLIGHT_GAIN_KI, &ki);
+				FlightControl_GetPidGain(pidId, FLIGHT_GAIN_KD, &kd);
+				printf("PID,OK,%s,KP=%.5f,KI=%.5f,KD=%.5f\r\n", pidName(pidId), kp, ki, kd);
+			}
+
 			return;
 		}
 
+		if (parseLimitType(arg3, &limitType))
 		{
-			float kp = 0.0f;
-			float ki = 0.0f;
-			float kd = 0.0f;
-			FlightControl_GetPidGain(pidId, FLIGHT_GAIN_KP, &kp);
-			FlightControl_GetPidGain(pidId, FLIGHT_GAIN_KI, &ki);
-			FlightControl_GetPidGain(pidId, FLIGHT_GAIN_KD, &kd);
-			printf("PID,OK,%s,KP=%.5f,KI=%.5f,KD=%.5f\r\n", pidName(pidId), kp, ki, kd);
+			if (!FlightControl_SetPidLimit(pidId, limitType, value))
+			{
+				FlightPidSetError_t err = FlightControl_GetLastPidSetError();
+				switch (err)
+				{
+					case FLIGHT_PID_SET_ERR_NOT_DISARMED:
+						printf("PID,ERR,forbidden:not_disarmed\r\n");
+						break;
+					case FLIGHT_PID_SET_ERR_FLASH_WRITE:
+						printf("PID,ERR,flash_write_failed\r\n");
+						break;
+					case FLIGHT_PID_SET_ERR_INVALID_INPUT:
+						printf("PID,ERR,invalid_input\r\n");
+						break;
+					default:
+						printf("PID,ERR,set failed\r\n");
+						break;
+				}
+				return;
+			}
+
+			{
+				float ilim = 0.0f;
+				float olim = 0.0f;
+				FlightControl_GetPidLimit(pidId, FLIGHT_LIMIT_INTEGRAL, &ilim);
+				FlightControl_GetPidLimit(pidId, FLIGHT_LIMIT_OUTPUT, &olim);
+				printf("PID,OK,%s,ILIM=%.5f,OLIM=%.5f\r\n", pidName(pidId), ilim, olim);
+			}
+
+			return;
 		}
 
+		printf("PID,ERR,unknown field(use kp/ki/kd/ilim/olim)\r\n");
 		return;
 	}
 
@@ -380,57 +435,25 @@ void Uart_Send_Task()
 
 	uart1RxStartDma();
 
-	//printf("FC,st,lk,cal,imuFresh,imuDrop%%,thr,r,p,y,rSp,pSp,ySp,rOut,pOut,yOut,m1,m2,m3,m4\r\n");
+	
 	while(1)
 	{
 		processUartRx();
 
 		FlightControl_GetDebugSnapshot(&dbg);
+
+		if (dbg.state == FLIGHT_STATE_ARMED)
+		{
+			//printf("m:%u s:%.2f sp:%.2f\r\n", dbg.throttle, dbg.yawRate, dbg.yawRateSp);
+			printf("x:%.2f,y:%.2f,z:%.2f\r\n", dbg.roll, dbg.pitch, dbg.yaw);
+			//printf("%.2f,%.2f\r\n",dbg.rollRateSp,  dbg.rollRate);
+			//printf("%u %u %u %u\r\n",dbg.m1,dbg.m2,dbg.m3,dbg.m4);
+		}
 		
-		printf("%u %u %u %u\r\n", dbg.m1, dbg.m2, dbg.m3, dbg.m4);
-		//printf("%.2f %.2f %.2f\r\n", dbg.roll, dbg.pitch, dbg.yaw);
 		
 		//vTaskDelayUntil(&xLastWakeTime, xPeriod);
-		vTaskDelay(pdMS_TO_TICKS(50));
+		vTaskDelay(pdMS_TO_TICKS(20));
 		
 	}
-	
-	/*
-	struct GYRO_ACCEL_Data GYRO_ACCEL_Rdata;
-	struct MAG_Data MAG_Rdata;
-	struct Pressure_Data Pressure_Rdata;
-	struct PPM_Data PPM_Rdata;
-	while(1)
-	{
-		
-		printf("\r\n\r\n");
-		
-		xQueueReceive(QueueGYROACCEL,&GYRO_ACCEL_Rdata,portMAX_DELAY);
-		for(uint8_t i=0; i<3; i++){
-			printf("%f ", (float)GYRO_ACCEL_Rdata.gyro[i] / 16.4);
-		}
-		printf("\r\n");
-		for(uint8_t i=0; i<3; i++){
-			printf("%f ", (float)GYRO_ACCEL_Rdata.accel[i] / 16384.0f * 9.80665f);
-		}
-		printf("\r\n");
-		
-		xQueueReceive(QueueMAG, &MAG_Rdata, portMAX_DELAY);
-		for(uint8_t i=0; i<3; i++){
-			printf("%d ", MAG_Rdata.mag[i]);
-		}
-		printf("\r\n");
-		
-		xQueueReceive(QueuePressure, &Pressure_Rdata, portMAX_DELAY);
-		printf("%d\r\n", Pressure_Rdata.pressure);
-		
-		
-		xQueueReceive(QueuePPM, &PPM_Rdata, portMAX_DELAY);
-		printf("%d", PPM_Rdata.ppmCh[0]);
-		
-
-		vTaskDelay(5);
-	
-	}*/
 	
 }

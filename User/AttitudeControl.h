@@ -35,8 +35,13 @@ typedef struct {
  * 姿态目标结构体
  */
 typedef struct {
-    float roll;         /* 横滚角 deg */
-    float pitch;        /* 俯仰角 deg */
+    /*
+     * 注意：roll/pitch 的单位随模式变化。
+     * - 角度模式（isAcro=false）：roll/pitch 为角度设定点（deg）
+     * - 角速度模式（isAcro=true）：roll/pitch 为角速度设定点（deg/s）
+     */
+    float roll;
+    float pitch;
     float yawRate;      /* 偏航角速度 deg/s */
 } AttitudeSetpoint_t;
 
@@ -101,7 +106,7 @@ void AttitudeController_Reset(AttitudeController_t* ctrl, const AttitudeState_t*
  * @param input 遥控器输入
  * @param sp 输出的姿态目标
  */
-void AttitudeController_GenerateSetpoint(const ControlInput_t* input, AttitudeSetpoint_t* sp);
+void AttitudeController_GenerateSetpoint(const ControlInput_t* input, AttitudeSetpoint_t* sp, bool isAcro);
 
 /**
  * @brief 更新姿态控制器（串级）

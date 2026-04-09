@@ -336,7 +336,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F401xE</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include;../User;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../User/UserTask;../User/PID;C:/Users/YLWIS/Desktop/Projects/自动跟拍无人机/stm32/flighter/User/User Task</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include;../User;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../User/UserTask;../User/PID;C:/Users/YLWIS/Desktop/Projects/自动跟拍无人机/stm32/flighter/User/UserTask;..\User\User Task</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -519,6 +519,16 @@
               <FileName>pid.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\User\PID\pid.h</FilePath>
+            </File>
+            <File>
+              <FileName>stackmonitor_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\User Task\stackmonitor_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>stackmonitor_task.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\User Task\stackmonitor_task.h</FilePath>
             </File>
             <File>
               <FileName>main.c</FileName>
@@ -819,16 +829,6 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
-            </File>
-            <File>
-              <FileName>stackmonitor_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\User\User Task\stackmonitor_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>stackmonitor_task.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\User\User Task\stackmonitor_task.h</FilePath>
             </File>
           </Files>
         </Group>

@@ -55,8 +55,10 @@ typedef struct
   float iLimit;       // 积分限幅值（绝对值），0 表示无限幅
   float outputLimit;  // PID 总输出限幅值（绝对值），0 表示无限幅
   float dt;           // 采样时间间隔（秒）
+  float errorDeadzone;// 误差死区阈值（绝对值），0 表示禁用
   lpf2pData dFilter;  // 微分项二阶低通滤波器
   bool enableDFilter; // 微分项滤波器使能标志
+  bool enableErrorDeadzone; // 误差死区使能
 } PidObject;
 
 /**
@@ -103,6 +105,12 @@ void pidReset(PidObject* pid, float initial);
  * @return PID algorithm output
  */
 float pidUpdate(PidObject* pid, const float measured, const bool isYawAngle);
+
+/**
+ * @brief 设置PID调试输出目标对象；仅当pidUpdate处理该对象时输出调试日志。
+ * @param pid 目标PID对象指针，传NULL表示不过滤（输出全部）。
+ */
+void pidSetDebugTarget(const PidObject* pid);
 
 /**
  * Set a new set point for the PID to track.

@@ -31,6 +31,14 @@
 #include <float.h>
 #include "autoconf.h"
 
+#define PID_INTEG_DEBUG 0
+#define PID_INTEG_DEBUG_DECIM 50u
+
+#if PID_INTEG_DEBUG
+#include <stdio.h>
+static const PidObject* sPidDbgTarget = NULL;
+#endif
+
 #define PID_MIN_DT_SEC 1e-5f
 
 void pidInit(PidObject* pid, const float desired, const float kp,
@@ -50,7 +58,9 @@ void pidInit(PidObject* pid, const float desired, const float kp,
   pid->iLimit        = DEFAULT_PID_INTEGRATION_LIMIT;
   pid->outputLimit   = DEFAULT_PID_OUTPUT_LIMIT;
   pid->dt            = (isfinite(dt) && dt > PID_MIN_DT_SEC) ? dt : PID_MIN_DT_SEC;
+  pid->errorDeadzone = 0.0f;
   pid->enableDFilter = enableDFilter;
+  pid->enableErrorDeadzone = false;
   if (pid->enableDFilter)
   {
     lpf2pInit(&pid->dFilter, samplingRate, cutoffFreq);
@@ -74,6 +84,11 @@ float pidUpdate(PidObject* pid, const float measured, const bool isYawAngle)
     } else if (pid->error < -180.0f){
       pid->error += 360.0f;
     }
+  }
+
+  if (pid->enableErrorDeadzone && pid->errorDeadzone > 0.0f && fabsf(pid->error) <= pid->errorDeadzone)
+  {
+    pid->error = 0.0f;
   }
   
   pid->outP = pid->kp * pid->error;
@@ -163,9 +178,38 @@ float pidUpdate(PidObject* pid, const float measured, const bool isYawAngle)
     output = constrain(output, -pid->outputLimit, pid->outputLimit);
   }
 
+#if PID_INTEG_DEBUG
+  {
+    static unsigned int sPidDbgDecim = 0u;
+    bool pidDbgMatch = (sPidDbgTarget == NULL) || (pid == sPidDbgTarget);
+    if (pidDbgMatch && (freezeIntegral || (sPidDbgDecim++ >= PID_INTEG_DEBUG_DECIM)))
+    {
+      sPidDbgDecim = 0u;
+      printf("%.2f, %.2f\r\n", measured, pid->integ);
+      /*
+      printf("PIDDBG,des=%.2f,mea=%.2f,err=%.2f,integ=%.2f,outI=%.2f,frz=%u\r\n",
+             pid->desired,
+             measured,
+             pid->error,
+             pid->integ,
+             pid->outI,
+             (unsigned int)freezeIntegral);*/
+    }
+  }
+#endif
+
   pid->prevMeasured = measured;
 
   return output;
+}
+
+void pidSetDebugTarget(const PidObject* pid)
+{
+#if PID_INTEG_DEBUG
+  sPidDbgTarget = pid;
+#else
+  (void)pid;
+#endif
 }
 
 void pidSetIntegralLimit(PidObject* pid, const float limit) {
